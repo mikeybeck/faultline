@@ -59,8 +59,11 @@ func send(title, body string, sound bool) error {
 			script = fmt.Sprintf(`display notification %q with title %q sound name "Glass"`, body, title)
 		}
 		return exec.Command("osascript", "-e", script).Run()
+	case "windows":
+		// Portable .exe: flash the taskbar button. Toasts need a registered
+		// AppUserModelID (usually an installer) and are skipped on purpose.
+		return flashTaskbar(sound)
 	default:
-		// Best-effort no-op on unsupported platforms.
 		return nil
 	}
 }
