@@ -1,0 +1,20 @@
+[2026-07-15 14:31:01] local.ERROR: TypeError: App\Http\Controllers\PaymentController::charge(): Argument #1 ($amount) must be of type int, string given, called in /var/www/app/Http/Controllers/PaymentController.php on line 81 {"exception":"[object] (TypeError(code: 0): Argument #1 ($amount) must be of type int, string given at /var/www/vendor/laravel/framework/src/Illuminate/Routing/Controller.php:54)
+[stacktrace]
+#0 /var/www/app/Http/Controllers/PaymentController.php(81): App\\Http\\Controllers\\PaymentController->charge('abc')
+#1 /var/www/vendor/laravel/framework/src/Illuminate/Routing/Controller.php(54): App\\Http\\Controllers\\PaymentController->store()
+#2 /var/www/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php(43): Illuminate\\Routing\\Controller->callAction('store', Array)
+"} 
+
+[2026-07-15 14:32:10] local.ERROR: SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'mikey@example.com' for key 'users_email_unique' (SQL: insert into `users` (`email`) values (mikey@example.com)) {"exception":"[object] (Illuminate\\Database\\QueryException(code: 23000): SQLSTATE[23000]: Integrity constraint violation at /var/www/app/Models/User.php:41)
+[stacktrace]
+#0 /var/www/vendor/laravel/framework/src/Illuminate/Database/Connection.php(760): Illuminate\\Database\\Connection->runQueryCallback()
+#1 /var/www/app/Models/User.php(41): Illuminate\\Database\\Eloquent\\Model->save()
+#2 /var/www/app/Http/Controllers/UserController.php(22): App\\Models\\User->register()
+"} 
+
+[2026-07-15 14:33:00] local.INFO: User logged in {"id":1}
+
+[2026-07-15 14:34:00] local.WARNING: ErrorException: Undefined array key "token" in /var/www/app/Http/Middleware/ApiAuth.php:19
+Stack trace:
+#0 /var/www/app/Http/Middleware/ApiAuth.php(19): Illuminate\\Foundation\\Bootstrap\\HandleExceptions->handleError()
+#1 /var/www/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php(183): App\\Http\\Middleware\\ApiAuth->handle()

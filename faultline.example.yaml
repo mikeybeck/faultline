@@ -1,0 +1,24 @@
+# Copy to faultline.yaml in your project root, then adjust paths.
+#
+#   cp faultline.example.yaml faultline.yaml
+
+sources:
+  - name: laravel
+    type: laravel
+    path: storage/logs/laravel.log
+
+  - name: apache
+    type: apache
+    path: /var/log/apache2/error.log
+
+notifications:
+  enabled: true
+  sound: false
+
+editor:
+  # One of: code, phpstorm, or a custom template with {file} and {line}
+  # Examples:
+  #   command: code
+  #   command: phpstorm
+  #   command: "nvim +{line} {file}"
+  command: code

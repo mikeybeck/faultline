@@ -1,0 +1,9 @@
+/faultline
+/bin/
+*.exe
+*.test
+*.out
+.idea/
+.vscode/
+faultline.yaml
+.faultline.yaml

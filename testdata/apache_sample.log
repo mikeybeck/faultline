@@ -1,0 +1,4 @@
+[Wed Jul 15 14:31:01.123456 2026] [php:error] [pid 1234] [client 127.0.0.1:54321] PHP Fatal error: Uncaught TypeError: Unsupported operand types in /var/www/app/Http/Controllers/PaymentController.php on line 81
+[Wed Jul 15 14:31:05.000000 2026] [php:warn] [pid 1234] [client 127.0.0.1:54322] PHP Warning: Undefined array key "id" in /var/www/app/Models/User.php on line 41
+[Wed Jul 15 14:31:10.000000 2026] [core:error] [pid 1235] [client 10.0.0.2:4444] AH00124: Request exceeded the limit of 10 internal redirects
+[Wed Jul 15 14:31:15.000000 2026] [mpm_prefork:notice] [pid 1000] AH00163: Apache/2.4.58 configured -- resuming normal operations
