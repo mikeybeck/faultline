@@ -13,10 +13,10 @@ const (
 
 // Status is reported to the TUI for each source.
 type Status struct {
-	Name    string
-	Type    string
-	Path    string
-	State   State
-	Message string
-	Updated time.Time
+	Name    string    `json:"name"`
+	Type    string    `json:"type"`
+	Path    string    `json:"path"`
+	State   State     `json:"state"`
+	Message string    `json:"message"`
+	Updated time.Time `json:"updated"`
 }

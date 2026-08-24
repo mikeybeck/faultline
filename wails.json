@@ -1,0 +1,12 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "faultline",
+  "outputfilename": "faultline",
+  "frontend:install": "npm install --workspaces=false --install-strategy=nested",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Mikey"
+  }
+}

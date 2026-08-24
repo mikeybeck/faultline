@@ -10,29 +10,29 @@ import (
 
 // Config is the project-level Faultline configuration.
 type Config struct {
-	Sources       []SourceConfig `yaml:"sources"`
-	Notifications NotifyConfig   `yaml:"notifications"`
-	Editor        EditorConfig   `yaml:"editor"`
+	Sources       []SourceConfig `yaml:"sources" json:"sources"`
+	Notifications NotifyConfig   `yaml:"notifications" json:"notifications"`
+	Editor        EditorConfig   `yaml:"editor" json:"editor"`
 }
 
 // SourceConfig describes a single log source.
 type SourceConfig struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"` // laravel | apache
-	Path string `yaml:"path"`
+	Name string `yaml:"name" json:"name"`
+	Type string `yaml:"type" json:"type"` // generic | laravel | apache
+	Path string `yaml:"path" json:"path"`
 }
 
 // NotifyConfig controls desktop notifications.
 type NotifyConfig struct {
-	Enabled bool `yaml:"enabled"`
-	Sound   bool `yaml:"sound"`
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	Sound   bool `yaml:"sound" json:"sound"`
 }
 
 // EditorConfig controls opening files at a location.
 type EditorConfig struct {
 	// Command is one of: code, phpstorm, or a custom template containing
 	// {file} and optionally {line}.
-	Command string `yaml:"command"`
+	Command string `yaml:"command" json:"command"`
 }
 
 // Load reads and validates a YAML config file.
@@ -87,6 +87,9 @@ func (c *Config) applyDefaults() {
 		if c.Sources[i].Name == "" {
 			c.Sources[i].Name = fmt.Sprintf("%s-%d", c.Sources[i].Type, i+1)
 		}
+		if c.Sources[i].Type == "" {
+			c.Sources[i].Type = "generic"
+		}
 	}
 }
 
@@ -100,9 +103,9 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("config: sources[%d].path is required", i)
 		}
 		switch s.Type {
-		case "laravel", "apache":
+		case "generic", "laravel", "apache":
 		default:
-			return fmt.Errorf("config: sources[%d].type must be laravel or apache, got %q", i, s.Type)
+			return fmt.Errorf("config: sources[%d].type must be generic, laravel, or apache, got %q", i, s.Type)
 		}
 	}
 	return nil
@@ -111,4 +114,26 @@ func (c *Config) Validate() error {
 // DefaultEnabledNotifications returns a notify config with notifications on.
 func DefaultEnabledNotifications() NotifyConfig {
 	return NotifyConfig{Enabled: true, Sound: false}
+}
+
+// Save writes cfg as YAML to path.
+func Save(path string, cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("save config: nil config")
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	cfg.applyDefaults()
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	return nil
 }

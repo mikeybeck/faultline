@@ -19,6 +19,8 @@ func ForType(sourceType, sourceName string) (Parser, error) {
 		return NewLaravel(sourceName), nil
 	case "apache":
 		return NewApache(sourceName), nil
+	case "generic":
+		return NewGeneric(sourceName), nil
 	default:
 		return nil, errUnsupported(sourceType)
 	}

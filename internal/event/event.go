@@ -20,19 +20,19 @@ const (
 
 // Event is a normalized log exception or error.
 type Event struct {
-	Source    string
-	Time      time.Time
-	Type      string
-	Message   string
-	File      string
-	Line      int
-	Severity  Severity
-	Stack     string
-	Raw       string
-	Hash      string
-	Count     int
-	FirstSeen time.Time
-	LastSeen  time.Time
+	Source    string    `json:"source"`
+	Time      time.Time `json:"time"`
+	Type      string    `json:"type"`
+	Message   string    `json:"message"`
+	File      string    `json:"file"`
+	Line      int       `json:"line"`
+	Severity  Severity  `json:"severity"`
+	Stack     string    `json:"stack"`
+	Raw       string    `json:"raw"`
+	Hash      string    `json:"hash"`
+	Count     int       `json:"count"`
+	FirstSeen time.Time `json:"firstSeen"`
+	LastSeen  time.Time `json:"lastSeen"`
 }
 
 // Location returns "file:line" when available.

@@ -1,0 +1,23 @@
+2026-07-15 14:31:01 ERROR TypeError: Cannot read properties of undefined (reading 'id')
+    at charge (/home/app/src/payments.js:81:11)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+Traceback (most recent call last):
+  File "/home/app/views.py", line 41, in create_user
+    user.save()
+  File "/home/app/models.py", line 12, in save
+    raise IntegrityError("duplicate email")
+IntegrityError: duplicate email
+
+panic: runtime error: index out of range [3] with length 2
+
+goroutine 1 [running]:
+main.charge()
+	/home/app/main.go:19 +0x65
+main.main()
+	/home/app/main.go:8 +0x1c
+
+INFO started worker pool
+DEBUG cache hit for session
+WARNING Deprecated: getUserName is deprecated
+    at legacy (/home/app/src/legacy.js:4:3)

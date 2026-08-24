@@ -7,3 +7,7 @@
 .vscode/
 faultline.yaml
 .faultline.yaml
+frontend/node_modules
+frontend/dist
+build/bin
+build/windows

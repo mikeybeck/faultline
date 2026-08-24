@@ -15,7 +15,7 @@ import (
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: faultline [flags]\n\n")
-		fmt.Fprintf(os.Stderr, "Local error awareness for Laravel and Apache logs.\n\n")
+		fmt.Fprintf(os.Stderr, "Local error inbox for any log file (terminal UI).\n\n")
 		flag.PrintDefaults()
 	}
 	configPath := flag.String("config", "", "path to faultline.yaml (default: search cwd)")
