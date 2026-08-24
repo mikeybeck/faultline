@@ -5,7 +5,7 @@
   export let customEditor = ''
   export let notifications = true
   export let sound = false
-  export let fromStart = false
+  export let fromStart = true
   export let error = ''
   export let busy = false
   export let onOpenFolder
@@ -91,7 +91,7 @@
     <div class="toggles">
       <label><input type="checkbox" bind:checked={notifications} /> Desktop notifications</label>
       <label><input type="checkbox" bind:checked={sound} /> Sound</label>
-      <label><input type="checkbox" bind:checked={fromStart} /> Read existing log content</label>
+      <label><input type="checkbox" bind:checked={fromStart} /> Load existing log lines</label>
     </div>
 
     <button class="btn primary" disabled={busy || sources.length === 0 || !projectDir} on:click={onStart}>

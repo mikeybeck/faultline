@@ -48,17 +48,19 @@ Requires Go 1.22+. On Linux, desktop notifications use `notify-send` (libnotify)
 
 Settings are saved as `faultline.yaml` in the project folder. The last project is remembered.
 
-By default only **new** lines are ingested. Turn on **Read existing log content** (or pass `--from-start`) to load what is already in the file.
+Existing log lines are ingested on start, then new lines are followed. Pass `--tail` to skip what is already in the file.
 
 ```bash
-faultline --config ./faultline.yaml --from-start
+faultline --config ./faultline.yaml
+faultline --config ./faultline.yaml --tail
 ```
 
 ## Terminal UI
 
 ```bash
 faultline --tui
-faultline --tui --config ./faultline.yaml --from-start
+faultline --tui --config ./faultline.yaml
+faultline --tui --config ./faultline.yaml --tail
 ```
 
 | Key | Action |
@@ -142,10 +144,10 @@ editor:
 EOF
 
 # Desktop:
-faultline --config /tmp/faultline-demo/faultline.yaml --from-start
+faultline --config /tmp/faultline-demo/faultline.yaml
 
 # Terminal:
-faultline --tui --config /tmp/faultline-demo/faultline.yaml --from-start
+faultline --tui --config /tmp/faultline-demo/faultline.yaml
 ```
 
 Then append another line to see live updates:

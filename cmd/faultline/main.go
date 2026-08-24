@@ -19,7 +19,8 @@ func main() {
 		flag.PrintDefaults()
 	}
 	configPath := flag.String("config", "", "path to faultline.yaml (default: search cwd)")
-	fromStart := flag.Bool("from-start", false, "read existing log content from the beginning")
+	fromStart := flag.Bool("from-start", true, "ingest existing log content, then follow new lines")
+	tailOnly := flag.Bool("tail", false, "follow new lines only; skip content already in the file")
 	flag.Parse()
 
 	path := *configPath
@@ -41,7 +42,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := app.Run(ctx, cfg, *fromStart); err != nil {
+	if err := app.Run(ctx, cfg, *fromStart && !*tailOnly); err != nil {
 		fmt.Fprintf(os.Stderr, "faultline: %v\n", err)
 		os.Exit(1)
 	}

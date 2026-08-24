@@ -25,7 +25,7 @@
   let customEditor = ''
   let notifications = true
   let sound = false
-  let fromStart = false
+  let fromStart = true
   let error = ''
   let busy = false
   let settingsOpen = false
@@ -72,7 +72,7 @@
   async function load() {
     const b = await Bootstrap()
     projectDir = b.projectDir || ''
-    fromStart = !!b.fromStart
+    fromStart = b.fromStart !== false
     if (b.config) applyConfig(b.config)
     else {
       const d = await DefaultConfig()

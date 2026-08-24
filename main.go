@@ -29,18 +29,21 @@ func main() {
 	}
 	useTUI := flag.Bool("tui", false, "run the terminal UI instead of the desktop app")
 	configPath := flag.String("config", "", "path to faultline.yaml (default: last project, or search cwd for --tui)")
-	fromStart := flag.Bool("from-start", false, "read existing log content from the beginning")
+	fromStart := flag.Bool("from-start", true, "ingest existing log content, then follow new lines")
+	tailOnly := flag.Bool("tail", false, "follow new lines only; skip content already in the file")
 	flag.Parse()
 
+	ingestFromStart := *fromStart && !*tailOnly
+
 	if *useTUI {
-		if err := runTUI(*configPath, *fromStart); err != nil {
+		if err := runTUI(*configPath, ingestFromStart); err != nil {
 			fmt.Fprintf(os.Stderr, "faultline: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	gui := NewApp(*configPath, *fromStart)
+	gui := NewApp(*configPath, ingestFromStart)
 	err := wails.Run(&options.App{
 		Title:     "Faultline",
 		Width:     1200,
