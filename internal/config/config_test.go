@@ -65,6 +65,17 @@ func TestValidateAcceptsGeneric(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsBrowserWithoutPath(t *testing.T) {
+	cfg := &Config{Sources: []SourceConfig{{Type: "browser"}}}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.applyDefaults()
+	if cfg.Sources[0].Path != "127.0.0.1:9477" {
+		t.Fatalf("path = %q", cfg.Sources[0].Path)
+	}
+}
+
 func TestSaveRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "faultline.yaml")

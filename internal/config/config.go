@@ -18,7 +18,7 @@ type Config struct {
 // SourceConfig describes a single log source.
 type SourceConfig struct {
 	Name string `yaml:"name" json:"name"`
-	Type string `yaml:"type" json:"type"` // generic | laravel | apache
+	Type string `yaml:"type" json:"type"` // generic | laravel | apache | browser
 	Path string `yaml:"path" json:"path"`
 }
 
@@ -90,6 +90,9 @@ func (c *Config) applyDefaults() {
 		if c.Sources[i].Type == "" {
 			c.Sources[i].Type = "generic"
 		}
+		if c.Sources[i].Type == "browser" && c.Sources[i].Path == "" {
+			c.Sources[i].Path = "127.0.0.1:9477"
+		}
 	}
 }
 
@@ -99,13 +102,15 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: at least one source is required")
 	}
 	for i, s := range c.Sources {
-		if s.Path == "" {
-			return fmt.Errorf("config: sources[%d].path is required", i)
-		}
 		switch s.Type {
+		case "browser":
+			continue
 		case "generic", "laravel", "apache":
 		default:
-			return fmt.Errorf("config: sources[%d].type must be generic, laravel, or apache, got %q", i, s.Type)
+			return fmt.Errorf("config: sources[%d].type must be generic, laravel, apache, or browser, got %q", i, s.Type)
+		}
+		if s.Path == "" {
+			return fmt.Errorf("config: sources[%d].path is required", i)
 		}
 	}
 	return nil

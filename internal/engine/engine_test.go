@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,8 +11,15 @@ import (
 	"time"
 
 	"github.com/mikey/faultline/internal/config"
+	"github.com/mikey/faultline/internal/ingest"
 	"github.com/mikey/faultline/internal/mark"
 )
+
+func testEngine() *Engine {
+	e := New()
+	e.SetIngestAddr(ingest.Disabled)
+	return e
+}
 
 func TestEngineIngestsGenericLog(t *testing.T) {
 	dir := t.TempDir()
@@ -23,7 +31,7 @@ func TestEngineIngestsGenericLog(t *testing.T) {
 		Sources: []config.SourceConfig{{Name: "app", Type: "generic", Path: logPath}},
 		Editor:  config.EditorConfig{Command: "code"},
 	}
-	eng := New()
+	eng := testEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := eng.Start(ctx, cfg, true); err != nil {
@@ -68,7 +76,7 @@ func TestEngineBackfillDoesNotNotify(t *testing.T) {
 		Sources: []config.SourceConfig{{Name: "app", Type: "generic", Path: logPath}},
 		Editor:  config.EditorConfig{Command: "code"},
 	}
-	eng := New()
+	eng := testEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := eng.Start(ctx, cfg, true); err != nil {
@@ -129,7 +137,7 @@ func TestEngineClearSkipsOnRestart(t *testing.T) {
 		Editor:  config.EditorConfig{Command: "code"},
 	}
 	marks := mark.Open(filepath.Join(dir, "marks.yaml"))
-	eng := New()
+	eng := testEngine()
 	eng.UseMarks(marks)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -155,7 +163,7 @@ func TestEngineClearSkipsOnRestart(t *testing.T) {
 	}
 	eng.Stop()
 
-	eng2 := New()
+	eng2 := testEngine()
 	eng2.UseMarks(marks)
 	if err := eng2.Start(ctx, cfg, true); err != nil {
 		t.Fatal(err)
@@ -206,7 +214,7 @@ func TestEngineClearMarksReingests(t *testing.T) {
 		Editor:  config.EditorConfig{Command: "code"},
 	}
 	marks := mark.Open(filepath.Join(dir, "marks.yaml"))
-	eng := New()
+	eng := testEngine()
 	eng.UseMarks(marks)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -232,7 +240,7 @@ func TestEngineClearMarksReingests(t *testing.T) {
 	}
 	eng.Stop()
 
-	eng2 := New()
+	eng2 := testEngine()
 	eng2.UseMarks(marks)
 	if err := eng2.Start(ctx, cfg, true); err != nil {
 		t.Fatal(err)
@@ -253,4 +261,68 @@ func TestEngineClearMarksReingests(t *testing.T) {
 
 func contains(s, sub string) bool {
 	return strings.Contains(s, sub)
+}
+
+func TestEngineIngestsBrowserPOST(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "app.log")
+	if err := os.WriteFile(logPath, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		Sources: []config.SourceConfig{{Name: "app", Type: "generic", Path: logPath}},
+		Editor:  config.EditorConfig{Command: "code"},
+	}
+	eng := New()
+	eng.SetIngestAddr("127.0.0.1:0")
+	eng.SetProjectDir(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := eng.Start(ctx, cfg, true); err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Stop()
+
+	var addr string
+	deadline := time.After(2 * time.Second)
+	for addr == "" {
+		addr = eng.BoundIngest()
+		if addr != "" {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("ingest did not bind")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	body := `{"type":"TypeError","message":"browser boom","file":"src/app.js","line":9,"stack":"TypeError: browser boom"}`
+	resp, err := http.Post("http://"+addr+"/ingest", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+
+	deadline = time.After(2 * time.Second)
+	for {
+		if eng.Store().Len() >= 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for browser event")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	ev := eng.Store().List("")[0]
+	if ev.Type != "TypeError" || ev.Source != "browser" {
+		t.Fatalf("event = %+v", ev)
+	}
+	if ev.Message != "browser boom" {
+		t.Fatalf("message = %q", ev.Message)
+	}
 }

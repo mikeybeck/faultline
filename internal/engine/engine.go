@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/mikey/faultline/internal/config"
 	"github.com/mikey/faultline/internal/editor"
 	"github.com/mikey/faultline/internal/event"
+	"github.com/mikey/faultline/internal/ingest"
 	"github.com/mikey/faultline/internal/mark"
 	"github.com/mikey/faultline/internal/notify"
 	"github.com/mikey/faultline/internal/parser"
@@ -20,6 +22,7 @@ import (
 const eventPingInterval = 250 * time.Millisecond
 
 // Engine tails log sources, parses them, and aggregates events.
+// While running it also listens for browser errors on 127.0.0.1:9477.
 type Engine struct {
 	mu sync.Mutex
 
@@ -38,6 +41,10 @@ type Engine struct {
 	followers []*source.Follower
 
 	notifyCalls atomic.Int64
+
+	projectDir  string
+	ingestAddr  string
+	boundIngest string
 }
 
 func New() *Engine {
@@ -93,6 +100,9 @@ func (e *Engine) sourcePaths() []string {
 	}
 	out := make([]string, 0, len(e.cfg.Sources))
 	for _, s := range e.cfg.Sources {
+		if s.Type == "browser" {
+			continue
+		}
 		out = append(out, s.Path)
 	}
 	return out
@@ -164,6 +174,28 @@ func (e *Engine) SetEditor(command string) {
 	e.opener.Command = command
 }
 
+// SetProjectDir is used to map browser stack URLs onto project files.
+func (e *Engine) SetProjectDir(dir string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.projectDir = dir
+}
+
+// SetIngestAddr overrides the browser HTTP listen address.
+// ingest.Disabled skips the listener (tests).
+func (e *Engine) SetIngestAddr(addr string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.ingestAddr = addr
+}
+
+// BoundIngest is the actual host:port of the browser listener, if running.
+func (e *Engine) BoundIngest() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.boundIngest
+}
+
 // Start begins watching cfg. Stop any previous run first.
 func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart bool) error {
 	if cfg == nil {
@@ -175,9 +207,30 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 
 	e.Stop()
 
+	e.mu.Lock()
+	ingestAddr := e.resolveIngestAddrLocked(cfg)
+	projectDir := e.projectDir
+	e.boundIngest = ""
+	e.mu.Unlock()
+
 	parsers := make(map[string]parser.Parser, len(cfg.Sources))
-	initial := make([]source.Status, 0, len(cfg.Sources))
+	initial := make([]source.Status, 0, len(cfg.Sources)+1)
+	browserName := ingest.DefaultName
+	hasBrowser := false
 	for _, src := range cfg.Sources {
+		if src.Type == "browser" {
+			hasBrowser = true
+			if src.Name != "" {
+				browserName = src.Name
+			}
+			initial = append(initial, source.Status{
+				Name:  src.Name,
+				Type:  src.Type,
+				Path:  ingest.NormalizeAddr(src.Path),
+				State: source.StateWaiting,
+			})
+			continue
+		}
 		p, err := parser.ForType(src.Type, src.Name)
 		if err != nil {
 			return err
@@ -190,9 +243,18 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 			State: source.StateWaiting,
 		})
 	}
+	if ingestAddr != ingest.Disabled && !hasBrowser {
+		initial = append(initial, source.Status{
+			Name:  browserName,
+			Type:  "browser",
+			Path:  ingest.NormalizeAddr(ingestAddr),
+			State: source.StateWaiting,
+		})
+	}
 
 	ctx, cancel := context.WithCancel(parent)
 	lineCh := make(chan source.LineEvent, 256)
+	parsedCh := make(chan event.Event, 64)
 
 	e.mu.Lock()
 	e.cfg = cfg
@@ -208,6 +270,9 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 
 	followers := make([]*source.Follower, 0, len(cfg.Sources))
 	for _, src := range cfg.Sources {
+		if src.Type == "browser" {
+			continue
+		}
 		var resume source.Resume
 		if marks != nil && fromStart {
 			if r, ok := marks.Get(src.Path); ok {
@@ -243,9 +308,53 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 		}()
 	}
 
+	if ingestAddr != ingest.Disabled {
+		e.wg.Add(1)
+		go func() {
+			defer e.wg.Done()
+			_, _ = ingest.Serve(ctx, ingestAddr, ingest.Options{
+				Name:       browserName,
+				ProjectDir: projectDir,
+				Emit: func(ev event.Event) {
+					select {
+					case parsedCh <- ev:
+					case <-ctx.Done():
+					}
+				},
+				OnStatus: func(s source.Status) {
+					e.noteStatus(s)
+					select {
+					case e.statusCh <- s:
+					default:
+					}
+				},
+				Ready: func(addr string) {
+					e.mu.Lock()
+					e.boundIngest = addr
+					e.mu.Unlock()
+				},
+			})
+		}()
+	}
+
 	e.wg.Add(1)
-	go e.ingestLoop(ctx, parsers, lineCh)
+	go e.ingestLoop(ctx, parsers, lineCh, parsedCh)
 	return nil
+}
+
+func (e *Engine) resolveIngestAddrLocked(cfg *config.Config) string {
+	if e.ingestAddr != "" {
+		return e.ingestAddr
+	}
+	for _, s := range cfg.Sources {
+		if s.Type == "browser" {
+			if strings.TrimSpace(s.Path) != "" {
+				return ingest.NormalizeAddr(s.Path)
+			}
+			return ingest.DefaultAddr
+		}
+	}
+	return ingest.DefaultAddr
 }
 
 // Restart stops watchers and starts again with cfg.
@@ -260,6 +369,7 @@ func (e *Engine) Stop() {
 	running := e.running
 	e.cancel = nil
 	e.running = false
+	e.boundIngest = ""
 	e.mu.Unlock()
 	if !running && cancel == nil {
 		return
@@ -278,7 +388,7 @@ func (e *Engine) Stop() {
 	}
 }
 
-func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parser, lineCh <-chan source.LineEvent) {
+func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parser, lineCh <-chan source.LineEvent, parsedCh <-chan event.Event) {
 	defer e.wg.Done()
 	flushTicker := time.NewTicker(250 * time.Millisecond)
 	defer flushTicker.Stop()
@@ -352,6 +462,13 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 			if !backfillSeen {
 				ping()
 			}
+		case ev, ok := <-parsedCh:
+			if !ok {
+				flushAll(false)
+				ping()
+				return
+			}
+			ingest(&ev, false)
 		case line, ok := <-lineCh:
 			if !ok {
 				flushAll(false)

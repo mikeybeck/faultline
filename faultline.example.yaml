@@ -4,7 +4,7 @@
 
 sources:
   - name: app
-    type: generic   # generic | laravel | apache
+    type: generic   # generic | laravel | apache | browser
     path: logs/app.log
 
   # Specialized parsers (optional)
@@ -14,6 +14,12 @@ sources:
   # - name: apache
   #   type: apache
   #   path: /var/log/apache2/error.log
+
+  # Browser errors via the unpacked extension in extension/
+  # (also starts automatically on 127.0.0.1:9477 while watching)
+  # - name: browser
+  #   type: browser
+  #   path: 127.0.0.1:9477
 
 notifications:
   enabled: true

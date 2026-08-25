@@ -53,6 +53,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 		a.configPath = a.flagConfig
 		a.projectDir = filepath.Dir(a.flagConfig)
+		a.eng.SetProjectDir(a.projectDir)
 		if err := a.eng.Start(ctx, cfg, a.fromStart); err != nil {
 			runtime.LogError(ctx, err.Error())
 		}
@@ -73,6 +74,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.projectDir = st.ProjectDir
 	a.configPath = st.ConfigPath
+	a.eng.SetProjectDir(a.projectDir)
 	if err := a.eng.Start(ctx, cfg, a.fromStart); err != nil {
 		runtime.LogError(ctx, err.Error())
 	}
@@ -264,6 +266,7 @@ func (a *App) SaveAndWatch(projectDir string, cfg config.Config, fromStart bool)
 	a.projectDir = projectDir
 	a.configPath = path
 	a.fromStart = fromStart
+	a.eng.SetProjectDir(projectDir)
 	if err := a.eng.Restart(a.ctx, &cfg, fromStart); err != nil {
 		return err
 	}

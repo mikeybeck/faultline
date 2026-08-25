@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Faultline</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Faultline</h1>
+      <p>
+        Errors are captured on localhost and local TLDs automatically. Add extra hosts for custom
+        <code>/etc/hosts</code> names (one per line).
+      </p>
+      <label for="hosts">Extra hosts</label>
+      <textarea id="hosts" rows="8" placeholder="localphishingbox.com&#10;*.localphishingbox.com"></textarea>
+      <p class="hint">Use <code>*.example.com</code> for subdomains. Ports are not needed.</p>
+      <p id="status" class="status" hidden></p>
+      <button type="button" id="save">Save</button>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

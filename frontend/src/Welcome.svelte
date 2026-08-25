@@ -10,6 +10,7 @@
   export let busy = false
   export let onOpenFolder
   export let onAddFile
+  export let onAddBrowser = () => {}
   export let onRemove
   export let onStart
   export let onSourceChange
@@ -22,7 +23,7 @@
 <div class="welcome">
   <div class="card">
     <h1>Faultline</h1>
-    <p class="lede">Watch any log file. Group repeats. Jump to the line in your editor.</p>
+    <p class="lede">Watch any log file. Group repeats. Jump to the line in your editor. Browser errors arrive through the extension — nothing to add to your app.</p>
 
     {#if error}
       <div class="banner">{error}</div>
@@ -35,6 +36,7 @@
     <div class="row-actions">
       <button class="btn" on:click={onOpenFolder}>Open folder</button>
       <button class="btn" on:click={onAddFile}>Add log file</button>
+      <button class="btn" on:click={onAddBrowser}>Add browser source</button>
     </div>
 
     <div class="field">
@@ -50,6 +52,7 @@
                 <option value="generic">generic</option>
                 <option value="laravel">laravel</option>
                 <option value="apache">apache</option>
+                <option value="browser">browser</option>
               </select>
               <div class="path" title={src.path}>{src.path}</div>
               <button class="btn ghost danger" on:click={() => onRemove(i)}>Remove</button>

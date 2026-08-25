@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -16,6 +17,9 @@ import (
 func Run(ctx context.Context, cfg *config.Config, fromStart bool) error {
 	eng := engine.New()
 	eng.UseMarks(mark.Default())
+	if wd, err := os.Getwd(); err == nil {
+		eng.SetProjectDir(wd)
+	}
 	if err := eng.Start(ctx, cfg, fromStart); err != nil {
 		return err
 	}

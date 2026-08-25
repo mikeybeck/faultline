@@ -44,7 +44,9 @@ Requires Go 1.22+. On Linux, desktop notifications use `notify-send` (libnotify)
 1. Run `faultline` (or `wails dev` while developing).
 2. **Open folder** — Faultline scans for `*.log` files (skipping `node_modules`, `vendor`, `.git`, …) and guesses the format.
 3. Or **Add log file** for any path, including a file that does not exist yet.
-4. Choose your editor, then **Start watching**.
+4. Optional: **Add browser source** if you only want frontend errors (no log file). Browser capture also starts automatically whenever you are watching.
+5. Choose your editor, then **Start watching**.
+6. Load the browser extension (see below) so page errors show up in the inbox.
 
 Settings are saved as `faultline.yaml` in the project folder. The last project is remembered.
 
@@ -76,16 +78,37 @@ faultline --tui --config ./faultline.yaml --tail
 
 Desktop shortcuts (inbox): `/` search, `o` open, `c` clear.
 
+## Browser errors
+
+The extension captures page errors without adding a script tag to your app. Faultline listens on `127.0.0.1:9477` while a project is being watched.
+
+Load it unpacked (the folder is `extension/` in this repo):
+
+- **Chrome / Edge / Chromium:** `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
+- **Firefox 128+:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `extension/manifest.json`
+
+It injects into local origins (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.ddev.site`, `*.lndo.site`). Custom names such as `localphishingbox.com` are not included by default — add them under the extension’s **Options** (one host per line, e.g. `localphishingbox.com`). Uncaught errors and unhandled promise rejections are sent to Faultline; if Faultline is not running the requests fail silently.
+
+A `browser` source in `faultline.yaml` is optional (custom listen address, or a browser-only project with no log files):
+
+```yaml
+sources:
+  - name: browser
+    type: browser
+    path: 127.0.0.1:9477
+```
+
 ## What it does
 
 | Capability | Details |
 |---|---|
-| Sources | Any `*.log` file (`generic`), plus Laravel Monolog and Apache error logs |
+| Sources | Any `*.log` file (`generic`), plus Laravel Monolog, Apache error logs, and browser errors via the extension |
 | Structured events | type, message, file, line, severity, stack, counts |
 | Dedup | fingerprints group repeats (`×N`, first/last seen) |
 | Desktop UI | source health, split inbox + detail, filter, severity, sort |
 | Notifications | desktop alert on **new** fingerprints only |
 | Editor | opens VS Code / Cursor / PhpStorm / custom command at file:line |
+| Browser | unpacked extension posts `window.onerror` / `unhandledrejection` to `127.0.0.1:9477` |
 
 ## Log formats
 

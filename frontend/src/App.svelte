@@ -185,6 +185,12 @@
     sources = [...sources, c]
   }
 
+  function addBrowser() {
+    error = ''
+    if (sources.some((s) => s.type === 'browser')) return
+    sources = [...sources, { name: 'browser', type: 'browser', path: '127.0.0.1:9477' }]
+  }
+
   function removeSource(i) {
     sources = sources.filter((_, idx) => idx !== i)
   }
@@ -286,6 +292,7 @@
       {busy}
       onOpenFolder={openFolder}
       onAddFile={addFile}
+      onAddBrowser={addBrowser}
       onRemove={removeSource}
       onStart={startWatching}
       {onSourceChange}
@@ -332,6 +339,7 @@
           {busy}
           onOpenFolder={openFolder}
           onAddFile={addFile}
+          onAddBrowser={addBrowser}
           onRemove={removeSource}
           onStart={saveSettings}
           {onSourceChange}
