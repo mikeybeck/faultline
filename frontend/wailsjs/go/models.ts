@@ -148,6 +148,8 @@ export namespace main {
 	    events: EventDTO[];
 	    sources: source.Status[];
 	    running: boolean;
+	    total: number;
+	    marked: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppState(source);
@@ -158,6 +160,8 @@ export namespace main {
 	        this.events = this.convertValues(source["events"], EventDTO);
 	        this.sources = this.convertValues(source["sources"], source.Status);
 	        this.running = source["running"];
+	        this.total = source["total"];
+	        this.marked = source["marked"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

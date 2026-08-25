@@ -7,8 +7,10 @@
     Bootstrap,
     CandidateFromPath,
     Clear,
+    ClearMark,
     DefaultConfig,
     DetectSources,
+    GetEvent,
     GetState,
     NewProject,
     OpenInEditor,
@@ -37,6 +39,11 @@
   let sort = 'recent'
   let selected = null
   let statusMsg = ''
+  let total = 0
+  let marked = false
+  let refreshTimer
+  let refreshBusy = false
+  let refreshQueued = false
 
   function cfgFromForm() {
     return {
@@ -60,12 +67,53 @@
   async function refresh() {
     const st = await GetState(filter, sort, severity)
     events = st.events || []
+    total = st.total || events.length
+    marked = !!st.marked
     sourceStatuses = st.sources || []
     if (selected) {
       const next = events.find((e) => e.hash === selected.hash)
-      selected = next || selected
+      if (next) {
+        selected = {
+          ...selected,
+          ...next,
+          stack: selected.stack,
+          raw: selected.raw,
+          message: selected.message || next.message,
+        }
+      }
     } else if (events.length) {
-      selected = events[0]
+      await selectEvent(events[0])
+    }
+  }
+
+  function scheduleRefresh() {
+    clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(runRefresh, 200)
+  }
+
+  async function runRefresh() {
+    if (refreshBusy) {
+      refreshQueued = true
+      return
+    }
+    refreshBusy = true
+    try {
+      await refresh()
+    } finally {
+      refreshBusy = false
+      if (refreshQueued) {
+        refreshQueued = false
+        scheduleRefresh()
+      }
+    }
+  }
+
+  async function selectEvent(ev) {
+    selected = ev
+    try {
+      selected = await GetEvent(ev.hash)
+    } catch (e) {
+      statusMsg = String(e)
     }
   }
 
@@ -84,11 +132,8 @@
 
   onMount(() => {
     load()
-    EventsOn('error:new', (ev) => {
-      statusMsg = 'New: ' + (ev.title || ev.type)
-      refresh()
-    })
-    EventsOn('status', () => refresh())
+    EventsOn('inbox:changed', scheduleRefresh)
+    EventsOn('status', scheduleRefresh)
     const onKey = (e) => {
       if (e.key === '/' && screen === 'inbox' && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault()
@@ -105,7 +150,7 @@
     }
     window.addEventListener('keydown', onKey)
     const tick = setInterval(() => {
-      if (screen === 'inbox') refresh()
+      if (screen === 'inbox') scheduleRefresh()
     }, 2000)
     return () => {
       window.removeEventListener('keydown', onKey)
@@ -186,7 +231,14 @@
     await Clear()
     selected = null
     await refresh()
-    statusMsg = 'Cleared'
+    statusMsg = 'Cleared — skipped on next start'
+  }
+
+  async function doClearMark() {
+    await ClearMark()
+    selected = null
+    await refresh()
+    statusMsg = 'Mark cleared — reading from the start'
   }
 
   async function doOpen(hash) {
@@ -241,20 +293,23 @@
   {:else}
     <Inbox
       {events}
+      {total}
       sources={sourceStatuses}
       {selected}
       {filter}
       {severity}
       {sort}
       {statusMsg}
-      onSelect={(ev) => (selected = ev)}
+      marked={marked}
+      onSelect={selectEvent}
       onOpen={doOpen}
       onClear={doClear}
+      onClearMark={doClearMark}
       onCopy={doCopy}
       onSettings={() => (settingsOpen = true)}
-      onFilter={(v) => { filter = v; refresh() }}
-      onSeverity={(v) => { severity = v; refresh() }}
-      onSort={(v) => { sort = v; refresh() }}
+      onFilter={(v) => { filter = v; scheduleRefresh() }}
+      onSeverity={(v) => { severity = v; scheduleRefresh() }}
+      onSort={(v) => { sort = v; scheduleRefresh() }}
     />
   {/if}
 

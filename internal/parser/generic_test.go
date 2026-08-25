@@ -94,3 +94,21 @@ func TestForTypeGeneric(t *testing.T) {
 		t.Fatalf("got %T", p)
 	}
 }
+
+func TestGenericLongGoPanicIsLinear(t *testing.T) {
+	p := NewGeneric("app")
+	p.Feed("panic: boom")
+	p.Feed("")
+	p.Feed("goroutine 1 [running]:")
+	for i := 0; i < 4000; i++ {
+		p.Feed("main.foo(0x1)")
+	}
+	p.Feed("\t/app/main.go:19")
+	got := p.Flush()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(got))
+	}
+	if got[0].Type != "panic" && !strings.EqualFold(got[0].Type, "panic") {
+		t.Fatalf("type = %q", got[0].Type)
+	}
+}

@@ -74,19 +74,7 @@ func (s *Store) Ingest(ev event.Event) Result {
 		existing.File = ev.File
 		existing.Line = ev.Line
 	}
-	// Move to front of order.
-	s.moveFront(ev.Hash)
 	return Result{Event: *existing, IsNew: false, Updated: true}
-}
-
-func (s *Store) moveFront(hash string) {
-	for i, h := range s.order {
-		if h == hash {
-			s.order = append(s.order[:i], s.order[i+1:]...)
-			break
-		}
-	}
-	s.order = append([]string{hash}, s.order...)
 }
 
 // Clear removes all events.
@@ -114,7 +102,20 @@ func (s *Store) List(filter string) []event.Event {
 		}
 		out = append(out, *ev)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].LastSeen.After(out[j].LastSeen)
+	})
 	return out
+}
+
+// Summaries is List without Stack/Raw, for cheap inbox snapshots.
+func (s *Store) Summaries(filter string) []event.Event {
+	items := s.List(filter)
+	for i := range items {
+		items[i].Stack = ""
+		items[i].Raw = ""
+	}
+	return items
 }
 
 // Get returns an event by hash.

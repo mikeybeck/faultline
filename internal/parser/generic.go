@@ -32,12 +32,14 @@ type Generic struct {
 }
 
 type pendingGeneric struct {
-	headerTime time.Time
-	typ        string
-	message    string
-	severity   event.Severity
-	stackLines []string
-	raw        strings.Builder
+	headerTime   time.Time
+	typ          string
+	message      string
+	severity     event.Severity
+	stackLines   []string
+	raw          strings.Builder
+	goDump       bool
+	hasTraceback bool
 }
 
 func NewGeneric(source string) *Generic {
@@ -99,9 +101,12 @@ func (p *Generic) start(line, trimmed string) *event.Event {
 	if sev == event.SeverityInfo {
 		return nil
 	}
+	lower := strings.ToLower(trimmed)
 	p.current = &pendingGeneric{
-		headerTime: parseGenericTime(trimmed),
-		severity:   sev,
+		headerTime:   parseGenericTime(trimmed),
+		severity:     sev,
+		goDump:       strings.Contains(lower, "panic") || strings.Contains(lower, "goroutine "),
+		hasTraceback: strings.Contains(lower, "traceback"),
 	}
 	p.current.raw.WriteString(line)
 	applyGenericTypeMessage(p.current, stripGenericPrefix(trimmed))
@@ -115,7 +120,13 @@ func (p *Generic) appendLine(line, trimmed string) {
 	p.current.raw.WriteByte('\n')
 	p.current.raw.WriteString(line)
 	p.current.stackLines = append(p.current.stackLines, line)
-	_ = trimmed
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, "panic") || strings.Contains(lower, "goroutine ") {
+		p.current.goDump = true
+	}
+	if strings.Contains(lower, "traceback") {
+		p.current.hasTraceback = true
+	}
 }
 
 func (p *Generic) finish() *event.Event {
@@ -226,11 +237,7 @@ func isGenericContinuation(line, trimmed string, cur *pendingGeneric) bool {
 }
 
 func isGoDumpContinuation(trimmed string, cur *pendingGeneric) bool {
-	if cur == nil {
-		return false
-	}
-	blob := strings.ToLower(cur.raw.String())
-	if !strings.Contains(blob, "panic") && !strings.Contains(blob, "goroutine ") {
+	if cur == nil || !cur.goDump {
 		return false
 	}
 	if strings.HasPrefix(trimmed, "created by ") {
@@ -243,11 +250,7 @@ func isGoDumpContinuation(trimmed string, cur *pendingGeneric) bool {
 }
 
 func isPythonExceptionLine(trimmed string, cur *pendingGeneric) bool {
-	if cur == nil {
-		return false
-	}
-	raw := strings.ToLower(cur.raw.String())
-	if !strings.Contains(raw, "traceback") {
+	if cur == nil || !cur.hasTraceback {
 		return false
 	}
 	if cur.typ != "" && !strings.EqualFold(cur.typ, "Traceback") {

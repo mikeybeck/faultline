@@ -18,6 +18,10 @@ export function Clear() {
   return window['go']['main']['App']['Clear']();
 }
 
+export function ClearMark() {
+  return window['go']['main']['App']['ClearMark']();
+}
+
 export function DefaultConfig() {
   return window['go']['main']['App']['DefaultConfig']();
 }

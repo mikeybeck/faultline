@@ -60,3 +60,43 @@ func TestByFrequency(t *testing.T) {
 		t.Fatalf("unexpected frequency order: %+v", items)
 	}
 }
+
+func TestListOrdersByLastSeen(t *testing.T) {
+	s := New()
+	t0 := time.Now()
+	a := event.Event{Source: "a", Type: "A", Message: "a", File: "a.php", Line: 1, Time: t0}
+	b := event.Event{Source: "a", Type: "B", Message: "b", File: "b.php", Line: 2, Time: t0.Add(time.Second)}
+	s.Ingest(a)
+	s.Ingest(b)
+	a.Time = t0.Add(2 * time.Second)
+	s.Ingest(a)
+	items := s.List("")
+	if len(items) != 2 || items[0].Type != "A" {
+		t.Fatalf("expected A first after later LastSeen, got %+v", items)
+	}
+}
+
+func TestSummariesOmitsStackAndRaw(t *testing.T) {
+	s := New()
+	s.Ingest(event.Event{
+		Source:  "a",
+		Type:    "TypeError",
+		Message: "x",
+		File:    "A.php",
+		Line:    1,
+		Time:    time.Now(),
+		Stack:   "stack dump",
+		Raw:     "raw dump",
+	})
+	items := s.Summaries("")
+	if len(items) != 1 {
+		t.Fatalf("len=%d", len(items))
+	}
+	if items[0].Stack != "" || items[0].Raw != "" {
+		t.Fatalf("summaries should omit stack/raw: %+v", items[0])
+	}
+	full, ok := s.Get(items[0].Hash)
+	if !ok || full.Stack != "stack dump" || full.Raw != "raw dump" {
+		t.Fatalf("Get should keep stack/raw: %+v", full)
+	}
+}

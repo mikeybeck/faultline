@@ -12,6 +12,8 @@ export function CandidateFromPath(arg1:string):Promise<detect.Candidate>;
 
 export function Clear():Promise<void>;
 
+export function ClearMark():Promise<void>;
+
 export function DefaultConfig():Promise<config.Config>;
 
 export function DetectSources(arg1:string):Promise<Array<detect.Candidate>>;

@@ -154,16 +154,26 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .list {
   overflow: auto;
   border-right: 1px solid var(--line);
+  position: relative;
 }
 .row {
-  padding: 12px 16px;
+  height: 76px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  overflow: hidden;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
 }
 .row:hover { background: rgba(255,255,255,0.02); }
 .row.sel { background: var(--accent-dim); box-shadow: inset 3px 0 0 var(--accent); }
 .row-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.row-title { font-weight: 620; }
+.row-title {
+  font-weight: 620;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pill-msg { color: var(--faint); font-weight: 400; }
 .sev { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
 .sev.critical { color: var(--crit); }
 .sev.error { color: var(--err); }

@@ -1,19 +1,52 @@
 <script>
+  import { onMount } from 'svelte'
   export let events = []
+  export let total = 0
   export let sources = []
   export let selected
   export let filter = ''
   export let severity = 'all'
   export let sort = 'recent'
   export let statusMsg = ''
+  export let marked = false
   export let onSelect
   export let onOpen
   export let onClear
+  export let onClearMark
   export let onCopy
   export let onSettings
   export let onFilter
   export let onSeverity
   export let onSort
+
+  const ROW = 76
+  const OVERSCAN = 8
+  let listEl
+  let scrollTop = 0
+  let viewH = 480
+
+  $: start = Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN)
+  $: visibleCount = Math.ceil(viewH / ROW) + OVERSCAN * 2
+  $: end = Math.min(events.length, start + visibleCount)
+  $: visible = events.slice(start, end)
+  $: padTop = start * ROW
+  $: padBot = Math.max(0, (events.length - end) * ROW)
+
+  onMount(() => {
+    const el = listEl
+    if (!el) return
+    const apply = () => {
+      viewH = el.clientHeight || 480
+    }
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
+
+  function onScroll(e) {
+    scrollTop = e.target.scrollTop
+  }
 
   function rel(iso) {
     if (!iso) return 'unknown'
@@ -28,7 +61,7 @@
 
   function pillClass(state) {
     if (state === 'ok') return 'ok'
-    if (state === 'waiting') return 'wait'
+    if (state === 'waiting' || state === 'ingesting') return 'wait'
     if (state === 'error') return 'error'
     return ''
   }
@@ -37,13 +70,13 @@
 <div class="top">
   <div class="brand">
     <h1>Faultline</h1>
-    <span>inbox</span>
+    <span>inbox{#if total} · {total}{/if}</span>
   </div>
   <div class="pills">
     {#each sources as s}
       <div class="pill {pillClass(s.state)}" title={s.message || s.path}>
         <span class="dot"></span>
-        {s.name}
+        {s.name}{#if s.state === 'ingesting' && s.message}<span class="pill-msg"> · {s.message}</span>{/if}
       </div>
     {/each}
     {#if sources.length === 0}
@@ -71,10 +104,13 @@
     <option value="frequency">Frequency</option>
   </select>
   <button class="btn danger" on:click={onClear}>Clear</button>
+  {#if marked}
+    <button class="btn" title="Forget the clear point and read the log from the beginning" on:click={onClearMark}>Clear mark</button>
+  {/if}
 </div>
 
 <div class="body">
-  <div class="list">
+  <div class="list" bind:this={listEl} on:scroll={onScroll}>
     {#if events.length === 0}
       <div class="empty">
         <div>
@@ -83,7 +119,8 @@
         </div>
       </div>
     {:else}
-      {#each events as ev}
+      <div style="height:{padTop}px"></div>
+      {#each visible as ev (ev.hash)}
         <div class="row" class:sel={selected && selected.hash === ev.hash} on:click={() => onSelect(ev)} on:keydown={(e) => e.key === 'Enter' && onSelect(ev)} role="button" tabindex="0">
           <div class="row-top">
             <div class="row-title">{ev.title}</div>
@@ -93,6 +130,7 @@
           <div class="meta"><span class="sev {ev.severity}">{ev.severity}</span> · {rel(ev.lastSeen)}</div>
         </div>
       {/each}
+      <div style="height:{padBot}px"></div>
     {/if}
   </div>
   <div class="detail">

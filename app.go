@@ -14,6 +14,7 @@ import (
 	"github.com/mikey/faultline/internal/detect"
 	"github.com/mikey/faultline/internal/engine"
 	"github.com/mikey/faultline/internal/event"
+	"github.com/mikey/faultline/internal/mark"
 	"github.com/mikey/faultline/internal/source"
 	"github.com/mikey/faultline/internal/statefile"
 )
@@ -30,8 +31,10 @@ type App struct {
 }
 
 func NewApp(configPath string, fromStart bool) *App {
+	eng := engine.New()
+	eng.UseMarks(mark.Default())
 	return &App{
-		eng:           engine.New(),
+		eng:           eng,
 		flagConfig:    configPath,
 		flagFromStart: fromStart,
 		fromStart:     fromStart,
@@ -84,11 +87,11 @@ func (a *App) relay() {
 		select {
 		case <-a.ctx.Done():
 			return
-		case ev, ok := <-a.eng.Events():
+		case _, ok := <-a.eng.Events():
 			if !ok {
 				return
 			}
-			runtime.EventsEmit(a.ctx, "error:new", toDTO(ev))
+			runtime.EventsEmit(a.ctx, "inbox:changed")
 		case st, ok := <-a.eng.Statuses():
 			if !ok {
 				return
@@ -136,6 +139,8 @@ type AppState struct {
 	Events  []EventDTO      `json:"events"`
 	Sources []source.Status `json:"sources"`
 	Running bool            `json:"running"`
+	Total   int             `json:"total"`
+	Marked  bool            `json:"marked"`
 }
 
 func (a *App) GetState(filter, sort, severity string) AppState {
@@ -144,7 +149,13 @@ func (a *App) GetState(filter, sort, severity string) AppState {
 	if sort == "frequency" {
 		items = a.eng.Store().ByFrequency(filter)
 	} else {
-		items = a.eng.Store().List(filter)
+		items = a.eng.Store().Summaries(filter)
+	}
+	if sort == "frequency" {
+		for i := range items {
+			items[i].Stack = ""
+			items[i].Raw = ""
+		}
 	}
 	sev := strings.ToLower(strings.TrimSpace(severity))
 	st.Events = make([]EventDTO, 0, len(items))
@@ -161,8 +172,10 @@ func (a *App) GetState(filter, sort, severity string) AppState {
 				continue
 			}
 		}
-		st.Events = append(st.Events, toDTO(ev))
+		st.Events = append(st.Events, toSummaryDTO(ev))
 	}
+	st.Total = len(st.Events)
+	st.Marked = a.eng.HasMarks()
 	return st
 }
 
@@ -176,6 +189,16 @@ func (a *App) GetEvent(hash string) (EventDTO, error) {
 
 func (a *App) Clear() {
 	a.eng.Clear()
+}
+
+// ClearMark forgets the resume point and re-reads logs from the beginning.
+func (a *App) ClearMark() {
+	cfg := a.eng.Config()
+	running := a.eng.Running()
+	a.eng.ClearMarks()
+	if running && cfg != nil {
+		_ = a.eng.Restart(a.ctx, cfg, a.fromStart)
+	}
 }
 
 func (a *App) OpenInEditor(hash string) error {
@@ -298,6 +321,13 @@ func toDTO(ev event.Event) EventDTO {
 		Title:     ev.Title(),
 		Location:  ev.Location(),
 	}
+}
+
+func toSummaryDTO(ev event.Event) EventDTO {
+	d := toDTO(ev)
+	d.Stack = ""
+	d.Raw = ""
+	return d
 }
 
 func formatTime(t time.Time) string {

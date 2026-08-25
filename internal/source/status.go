@@ -6,9 +6,10 @@ import "time"
 type State string
 
 const (
-	StateWaiting State = "waiting" // file missing, waiting for create
-	StateOK      State = "ok"
-	StateError   State = "error"
+	StateWaiting   State = "waiting"   // file missing, waiting for create
+	StateIngesting State = "ingesting" // reading existing content from start
+	StateOK        State = "ok"
+	StateError     State = "error"
 )
 
 // Status is reported to the TUI for each source.
