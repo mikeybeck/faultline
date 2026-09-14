@@ -84,10 +84,10 @@ Desktop shortcuts (inbox): `/` search, `j`/`k` or arrows move, `Enter` focus det
 
 The extension captures page errors without adding a script tag to your app. Faultline listens on `127.0.0.1:9477` while a project is being watched.
 
-Load it unpacked (the folder is `extension/` in this repo):
+Load it unpacked. From a GitHub release, unzip `faultline-extension.zip` first.
 
-- **Chrome / Edge / Chromium:** `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
-- **Firefox 128+:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `extension/manifest.json`
+- **Chrome / Edge / Chromium:** `chrome://extensions` → Developer mode → Load unpacked → select the `faultline-extension` folder
+- **Firefox 128+:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `manifest.json` in that folder
 
 It injects into local origins (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.ddev.site`, `*.lndo.site`). Custom names such as `localphishingbox.com` are not included by default — add them under **Settings → Extra browser hosts** (Faultline serves them at `http://127.0.0.1:9477/hosts`) or the extension’s **Options**. Uncaught errors, unhandled promise rejections, and errors a framework swallows then prints with `console.error` (Vue `v-on` handlers, for example) are sent to Faultline; if Faultline is not running the requests fail silently.
 
@@ -207,7 +207,15 @@ go vet ./internal/... ./cmd/...
 go fmt ./...
 wails doctor
 wails dev -tags webkit2_41
-wails build -tags webkit2_41
+./build.sh                 # Linux desktop (webkit2_41)
+./build.sh windows         # faultline.exe (needs mingw-w64-gcc)
+./build.sh windows -nsis   # plus NSIS installer
+./build.sh tui
+./build.sh tui windows
+./build.sh extension
+./build.sh release v0.1.0          # Linux + Windows + extension zip, publish with gh
+./build.sh release v0.1.0 -nsis
+NOTES='Bug fixes.' ./build.sh release v0.1.0
 ```
 
 ## Roadmap ideas

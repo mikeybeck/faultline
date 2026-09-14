@@ -11,5 +11,6 @@ frontend/node_modules
 frontend/dist
 build/bin
 build/windows
+build/release
 /deploy.sh
 /deploy.local.sh
