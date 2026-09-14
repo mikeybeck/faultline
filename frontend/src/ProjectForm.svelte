@@ -80,7 +80,7 @@
     <input
       id="custom-editor"
       value={customEditor}
-      placeholder="phpstorm64.exe or nvim +{line} {file}"
+      placeholder={'phpstorm64.exe or nvim +{line} {file}'}
       on:input={(e) => onSourceChange(-1, { editor: e.target.value, custom: true })}
     />
   </div>
