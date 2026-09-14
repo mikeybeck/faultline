@@ -1,5 +1,17 @@
 export namespace config {
 	
+	export class BrowserConfig {
+	    extraHosts: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BrowserConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.extraHosts = source["extraHosts"];
+	    }
+	}
 	export class InboxConfig {
 	    followLatest: boolean;
 	
@@ -54,29 +66,17 @@ export namespace config {
 	        this.path = source["path"];
 	    }
 	}
-	export class BrowserConfig {
-	    extraHosts: string[];
-
-	    static createFrom(source: any = {}) {
-	        return new BrowserConfig(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.extraHosts = source["extraHosts"];
-	    }
-	}
 	export class Config {
 	    sources: SourceConfig[];
 	    notifications: NotifyConfig;
 	    editor: EditorConfig;
 	    inbox: InboxConfig;
 	    browser: BrowserConfig;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sources = this.convertValues(source["sources"], SourceConfig);
@@ -131,6 +131,27 @@ export namespace detect {
 
 }
 
+export namespace ingest {
+	
+	export class Frame {
+	    file: string;
+	    line: number;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Frame(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.line = source["line"];
+	        this.text = source["text"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class EventDTO {
@@ -150,11 +171,11 @@ export namespace main {
 	    title: string;
 	    location: string;
 	    frames: ingest.Frame[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new EventDTO(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.source = source["source"];
@@ -174,7 +195,7 @@ export namespace main {
 	        this.location = source["location"];
 	        this.frames = this.convertValues(source["frames"], ingest.Frame);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -349,37 +370,16 @@ export namespace source {
 
 }
 
-export namespace ingest {
-
-	export class Frame {
-	    file: string;
-	    line: number;
-	    text: string;
-
-	    static createFrom(source: any = {}) {
-	        return new Frame(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.file = source["file"];
-	        this.line = source["line"];
-	        this.text = source["text"];
-	    }
-	}
-
-}
-
 export namespace statefile {
-
+	
 	export class Project {
 	    dir: string;
 	    configPath: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Project(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.dir = source["dir"];
