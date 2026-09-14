@@ -4,7 +4,7 @@
 
 sources:
   - name: app
-    type: generic   # generic | laravel | apache | browser
+    type: generic   # generic | laravel | apache | json | browser | command
     path: logs/app.log
 
   # Specialized parsers (optional)
@@ -14,12 +14,24 @@ sources:
   # - name: apache
   #   type: apache
   #   path: /var/log/apache2/error.log
+  # - name: api
+  #   type: json
+  #   path: logs/api.log
+
+  # Watch process output instead of a file
+  # - name: vite
+  #   type: command
+  #   path: npm run dev
 
   # Browser errors via the unpacked extension in extension/
   # (also starts automatically on 127.0.0.1:9477 while watching)
   # - name: browser
   #   type: browser
   #   path: 127.0.0.1:9477
+
+# browser:
+#   extraHosts:
+#     - localphishingbox.com
 
 notifications:
   enabled: true

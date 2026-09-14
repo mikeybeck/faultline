@@ -1,5 +1,17 @@
 export namespace config {
 	
+	export class InboxConfig {
+	    followLatest: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new InboxConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.followLatest = source["followLatest"];
+	    }
+	}
 	export class EditorConfig {
 	    command: string;
 	
@@ -42,20 +54,36 @@ export namespace config {
 	        this.path = source["path"];
 	    }
 	}
+	export class BrowserConfig {
+	    extraHosts: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new BrowserConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.extraHosts = source["extraHosts"];
+	    }
+	}
 	export class Config {
 	    sources: SourceConfig[];
 	    notifications: NotifyConfig;
 	    editor: EditorConfig;
-	
+	    inbox: InboxConfig;
+	    browser: BrowserConfig;
+
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sources = this.convertValues(source["sources"], SourceConfig);
 	        this.notifications = this.convertValues(source["notifications"], NotifyConfig);
 	        this.editor = this.convertValues(source["editor"], EditorConfig);
+	        this.inbox = this.convertValues(source["inbox"], InboxConfig);
+	        this.browser = this.convertValues(source["browser"], BrowserConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -76,6 +104,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 
@@ -120,11 +149,12 @@ export namespace main {
 	    lastSeen: string;
 	    title: string;
 	    location: string;
-	
+	    frames: ingest.Frame[];
+
 	    static createFrom(source: any = {}) {
 	        return new EventDTO(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.source = source["source"];
@@ -142,7 +172,26 @@ export namespace main {
 	        this.lastSeen = source["lastSeen"];
 	        this.title = source["title"];
 	        this.location = source["location"];
+	        this.frames = this.convertValues(source["frames"], ingest.Frame);
 	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class AppState {
 	    events: EventDTO[];
@@ -150,6 +199,8 @@ export namespace main {
 	    running: boolean;
 	    total: number;
 	    marked: boolean;
+	    ingestAddr: string;
+	    sourceCounts: Record<string, number>;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppState(source);
@@ -162,6 +213,8 @@ export namespace main {
 	        this.running = source["running"];
 	        this.total = source["total"];
 	        this.marked = source["marked"];
+	        this.ingestAddr = source["ingestAddr"];
+	        this.sourceCounts = source["sourceCounts"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -189,6 +242,9 @@ export namespace main {
 	    config?: config.Config;
 	    fromStart: boolean;
 	    running: boolean;
+	    recent: statefile.Project[];
+	    editors: string[];
+	    ingestAddr: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Bootstrap(source);
@@ -202,6 +258,9 @@ export namespace main {
 	        this.config = this.convertValues(source["config"], config.Config);
 	        this.fromStart = source["fromStart"];
 	        this.running = source["running"];
+	        this.recent = this.convertValues(source["recent"], statefile.Project);
+	        this.editors = source["editors"];
+	        this.ingestAddr = source["ingestAddr"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -221,6 +280,25 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace persist {
+	
+	export class Mute {
+	    kind: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Mute(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.value = source["value"];
+	    }
 	}
 
 }
@@ -267,6 +345,46 @@ export namespace source {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace ingest {
+
+	export class Frame {
+	    file: string;
+	    line: number;
+	    text: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Frame(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.line = source["line"];
+	        this.text = source["text"];
+	    }
+	}
+
+}
+
+export namespace statefile {
+
+	export class Project {
+	    dir: string;
+	    configPath: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Project(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dir = source["dir"];
+	        this.configPath = source["configPath"];
+	    }
 	}
 
 }

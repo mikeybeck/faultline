@@ -35,6 +35,7 @@ type Deps struct {
 	StatusCh      <-chan source.Status
 	Clear         func()
 	ResetMark     func()
+	Dismiss       func(hashes []string)
 }
 
 type Model struct {
@@ -44,6 +45,7 @@ type Model struct {
 	statusCh  <-chan source.Status
 	clear     func()
 	resetMark func()
+	dismiss   func(hashes []string)
 
 	statuses  []source.Status
 	items     []event.Event
@@ -71,6 +73,7 @@ func New(d Deps) Model {
 		statusCh:  d.StatusCh,
 		clear:     d.Clear,
 		resetMark: d.ResetMark,
+		dismiss:   d.Dismiss,
 		statuses:  append([]source.Status(nil), d.InitialStatus...),
 		filterIn:  ti,
 		mode:      viewList,
@@ -130,7 +133,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case eventMsg:
 		m.refresh()
-		m.statusMsg = fmt.Sprintf("New: %s", event.Event(msg).Title())
+		if ev := event.Event(msg); ev.Hash != "" {
+			m.statusMsg = fmt.Sprintf("New: %s", ev.Title())
+		}
 		return m, waitEvent(m.events)
 
 	case statusMsg:
@@ -162,6 +167,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = viewList
 		case key.Matches(msg, keys.Open):
 			m.openSelected()
+		case key.Matches(msg, keys.Dismiss):
+			if ev, ok := m.selected(); ok {
+				if m.dismiss != nil {
+					m.dismiss([]string{ev.Hash})
+				} else {
+					m.store.Remove(ev.Hash)
+				}
+				m.refresh()
+				m.statusMsg = "Dismissed"
+			}
 		case key.Matches(msg, keys.Clear):
 			if m.clear != nil {
 				m.clear()
@@ -169,12 +184,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.store.Clear()
 			}
 			m.refresh()
-			m.statusMsg = "Cleared — skipped on next start"
+			m.statusMsg = "Caught up — skipped on next start"
 		case key.Matches(msg, keys.ResetMark):
 			if m.resetMark != nil {
 				m.resetMark()
 				m.refresh()
-				m.statusMsg = "Mark cleared — reading from the start"
+				m.statusMsg = "Re-reading logs from the start"
 			}
 		case key.Matches(msg, keys.Filter):
 			m.mode = viewFilter
@@ -301,7 +316,7 @@ func (m Model) View() string {
 		b.WriteString(dimStyle.Render(m.statusMsg))
 		b.WriteString("\n")
 	}
-	b.WriteString(helpStyle.Render("↑/↓ move · Enter detail · o open · c clear · R reset mark · / filter · s sort · q quit"))
+	b.WriteString(helpStyle.Render("↑/↓ move · Enter detail · o open · d dismiss · c caught up · R re-read logs · / filter · s sort · q quit"))
 	return b.String()
 }
 
@@ -489,6 +504,7 @@ type keyMap struct {
 	Back      key.Binding
 	Open      key.Binding
 	Clear     key.Binding
+	Dismiss   key.Binding
 	ResetMark key.Binding
 	Filter    key.Binding
 	Sort      key.Binding
@@ -501,6 +517,7 @@ var keys = keyMap{
 	Enter:     key.NewBinding(key.WithKeys("enter")),
 	Back:      key.NewBinding(key.WithKeys("esc", "backspace")),
 	Open:      key.NewBinding(key.WithKeys("o")),
+	Dismiss:   key.NewBinding(key.WithKeys("d")),
 	Clear:     key.NewBinding(key.WithKeys("c")),
 	ResetMark: key.NewBinding(key.WithKeys("R")),
 	Filter:    key.NewBinding(key.WithKeys("/")),

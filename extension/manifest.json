@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Faultline",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Send local page errors to the Faultline inbox. Nothing to add to your app.",
   "icons": {
     "16": "icons/icon16.png",
@@ -9,7 +9,7 @@
     "128": "icons/icon128.png"
   },
   "minimum_chrome_version": "111",
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage", "scripting", "alarms"],
   "optional_host_permissions": ["*://*/*"],
   "options_ui": {
     "page": "options.html",

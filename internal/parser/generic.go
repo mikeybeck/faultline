@@ -50,6 +50,16 @@ func (p *Generic) Feed(line string) []*event.Event {
 	line = strings.TrimRight(line, "\r")
 	trimmed := strings.TrimSpace(line)
 
+	if jsonEv := ParseJSONLine(p.source, trimmed); jsonEv != nil {
+		var out []*event.Event
+		if p.current != nil {
+			if done := p.finish(); done != nil {
+				out = append(out, done)
+			}
+		}
+		return append(out, jsonEv)
+	}
+
 	if p.current != nil {
 		if trimmed == "" {
 			// Keep the record open: Go panics and others put a blank before the stack.

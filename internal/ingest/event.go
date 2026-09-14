@@ -2,7 +2,6 @@ package ingest
 
 import (
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -129,14 +128,24 @@ func ResolveFile(file, projectDir string) string {
 		return strings.TrimPrefix(file, "/")
 	}
 	if filepath.IsAbs(file) {
-		if _, err := os.Stat(file); err == nil {
+		if fileExists(file) {
 			return file
 		}
+		if hit := findByBase(projectDir, filepath.Base(file)); hit != "" {
+			return hit
+		}
+		return file
 	}
 	rel := strings.TrimPrefix(file, "/")
 	cand := filepath.Join(projectDir, rel)
-	if _, err := os.Stat(cand); err == nil {
+	if fileExists(cand) {
 		return cand
+	}
+	if hit := findByBase(projectDir, rel); hit != "" {
+		return hit
+	}
+	if hit := findByBase(projectDir, filepath.Base(rel)); hit != "" {
+		return hit
 	}
 	return rel
 }

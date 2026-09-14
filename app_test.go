@@ -8,7 +8,7 @@ import (
 
 func TestToSummaryDTOOmitsStackAndRaw(t *testing.T) {
 	ev := event.Event{Type: "TypeError", Stack: "stack", Raw: "raw", Hash: "abc"}
-	full := toDTO(ev)
+	full := toDTO(ev, "")
 	if full.Stack != "stack" || full.Raw != "raw" {
 		t.Fatalf("toDTO dropped detail: %+v", full)
 	}

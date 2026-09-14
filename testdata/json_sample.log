@@ -1,0 +1,3 @@
+{"level":50,"msg":"Cannot charge","err":{"type":"TypeError","message":"Cannot charge","stack":"TypeError: Cannot charge\n    at charge (/app/src/pay.js:81:1)"}}
+{"level":"error","message":"failed lookup"}
+{"level":30,"msg":"ok"}

@@ -15,6 +15,7 @@ import (
 	"github.com/mikey/faultline/internal/mark"
 	"github.com/mikey/faultline/internal/notify"
 	"github.com/mikey/faultline/internal/parser"
+	"github.com/mikey/faultline/internal/persist"
 	"github.com/mikey/faultline/internal/source"
 	"github.com/mikey/faultline/internal/store"
 )
@@ -38,6 +39,7 @@ type Engine struct {
 	statuses  []source.Status
 	running   bool
 	marks     *mark.Store
+	persist   *persist.DB
 	followers []*source.Follower
 
 	notifyCalls atomic.Int64
@@ -92,6 +94,30 @@ func (e *Engine) UseMarks(s *mark.Store) {
 	e.marks = s
 }
 
+// UsePersist attaches the SQLite inbox. Nil is a no-op (RAM only).
+func (e *Engine) UsePersist(db *persist.DB) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.persist = db
+}
+
+// ClosePersist closes the inbox database.
+func (e *Engine) ClosePersist() {
+	e.mu.Lock()
+	db := e.persist
+	e.persist = nil
+	e.mu.Unlock()
+	if db != nil {
+		_ = db.Close()
+	}
+}
+
+func (e *Engine) persistState() (*persist.DB, string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.persist, e.projectDir
+}
+
 func (e *Engine) sourcePaths() []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -100,12 +126,40 @@ func (e *Engine) sourcePaths() []string {
 	}
 	out := make([]string, 0, len(e.cfg.Sources))
 	for _, s := range e.cfg.Sources {
-		if s.Type == "browser" {
+		if !config.IsFileSource(s.Type) {
 			continue
 		}
 		out = append(out, s.Path)
 	}
 	return out
+}
+
+func (e *Engine) fileSourceNames() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.cfg == nil {
+		return nil
+	}
+	out := make([]string, 0, len(e.cfg.Sources))
+	for _, s := range e.cfg.Sources {
+		if !config.IsFileSource(s.Type) {
+			continue
+		}
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+func (e *Engine) hydrate() {
+	db, project := e.persistState()
+	if db == nil || project == "" {
+		return
+	}
+	items, err := db.LoadActive(project)
+	if err != nil {
+		return
+	}
+	e.store.Load(items)
 }
 
 // Positions returns the current read offset of each followed file.
@@ -127,20 +181,91 @@ func (e *Engine) Positions() map[string]source.Resume {
 	return out
 }
 
-// Clear empties the inbox and saves resume marks at the current file offsets.
+// Clear dismisses the inbox (until the next occurrence) and saves log resume marks.
 func (e *Engine) Clear() {
 	if e.marks != nil {
 		_ = e.marks.PutMany(e.Positions())
 	}
+	if db, project := e.persistState(); db != nil {
+		_ = db.DismissAll(project, time.Now())
+	}
 	e.store.Clear()
 }
 
-// ClearMarks forgets saved resume points and empties the inbox.
-func (e *Engine) ClearMarks() {
+// ResetInbox drops in-memory events without changing persistence or marks.
+func (e *Engine) ResetInbox() {
 	e.store.Clear()
+}
+
+// ClearMarks forgets saved resume points and drops file-source events so logs can be re-read.
+// Browser events, mutes, and dismissed browser rows are left alone.
+func (e *Engine) ClearMarks() {
+	names := e.fileSourceNames()
+	e.store.RemoveBySources(names...)
+	if db, project := e.persistState(); db != nil {
+		_ = db.DeleteBySources(project, names)
+	}
 	if e.marks != nil {
 		_ = e.marks.Delete(e.sourcePaths()...)
 	}
+}
+
+// Dismiss hides fingerprints until they occur again.
+func (e *Engine) Dismiss(hashes []string) {
+	if len(hashes) == 0 {
+		return
+	}
+	if db, project := e.persistState(); db != nil {
+		_ = db.Dismiss(project, hashes, time.Now())
+	}
+	e.store.Remove(hashes...)
+}
+
+// DismissMatching hides events that match the current inbox filters.
+func (e *Engine) DismissMatching(filter, severity, source, typ string) {
+	e.Dismiss(e.store.MatchingHashes(filter, severity, source, typ))
+}
+
+// Mute hides a fingerprint or type until unmuted.
+func (e *Engine) Mute(kind, value string) error {
+	if db, project := e.persistState(); db != nil {
+		if err := db.Mute(project, kind, value); err != nil {
+			return err
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case persist.KindHash:
+		e.store.Remove(strings.TrimSpace(value))
+	case persist.KindType:
+		e.store.Remove(e.store.MatchingHashes("", "all", "", value)...)
+	}
+	return nil
+}
+
+// Unmute removes a hide rule and restores matching active events.
+func (e *Engine) Unmute(kind, value string) error {
+	db, project := e.persistState()
+	if db == nil {
+		return nil
+	}
+	if err := db.Unmute(project, kind, value); err != nil {
+		return err
+	}
+	e.hydrate()
+	return nil
+}
+
+// Mutes returns hide rules for the current project.
+func (e *Engine) Mutes() []persist.Mute {
+	db, project := e.persistState()
+	if db == nil {
+		return nil
+	}
+	m, err := db.Mutes(project)
+	if err != nil {
+		return nil
+	}
+	return m
 }
 
 // HasMarks reports whether any current source has a saved resume point.
@@ -210,6 +335,7 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 	e.mu.Lock()
 	ingestAddr := e.resolveIngestAddrLocked(cfg)
 	projectDir := e.projectDir
+	extraHosts := append([]string(nil), cfg.Browser.ExtraHosts...)
 	e.boundIngest = ""
 	e.mu.Unlock()
 
@@ -236,11 +362,15 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 			return err
 		}
 		parsers[src.Name] = p
+		state := source.StateWaiting
+		if src.Type == "command" {
+			state = source.StateWaiting
+		}
 		initial = append(initial, source.Status{
 			Name:  src.Name,
 			Type:  src.Type,
 			Path:  src.Path,
-			State: source.StateWaiting,
+			State: state,
 		})
 	}
 	if ingestAddr != ingest.Disabled && !hasBrowser {
@@ -268,9 +398,34 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 	marks := e.marks
 	e.mu.Unlock()
 
+	e.hydrate()
+	e.pingInbox()
+
 	followers := make([]*source.Follower, 0, len(cfg.Sources))
 	for _, src := range cfg.Sources {
 		if src.Type == "browser" {
+			continue
+		}
+		onStatus := func(s source.Status) {
+			e.noteStatus(s)
+			select {
+			case e.statusCh <- s:
+			default:
+			}
+		}
+		if src.Type == "command" {
+			cmd := &source.Command{
+				Name:     src.Name,
+				Type:     src.Type,
+				Path:     src.Path,
+				Dir:      projectDir,
+				OnStatus: onStatus,
+			}
+			e.wg.Add(1)
+			go func(c *source.Command) {
+				defer e.wg.Done()
+				_ = c.Run(ctx, lineCh)
+			}(cmd)
 			continue
 		}
 		var resume source.Resume
@@ -285,13 +440,7 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 			Path:      src.Path,
 			FromStart: fromStart,
 			Resume:    resume,
-			OnStatus: func(s source.Status) {
-				e.noteStatus(s)
-				select {
-				case e.statusCh <- s:
-				default:
-				}
-			},
+			OnStatus:  onStatus,
 		}
 		followers = append(followers, f)
 	}
@@ -315,6 +464,7 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 			_, _ = ingest.Serve(ctx, ingestAddr, ingest.Options{
 				Name:       browserName,
 				ProjectDir: projectDir,
+				ExtraHosts: extraHosts,
 				Emit: func(ev event.Event) {
 					select {
 					case parsedCh <- ev:
@@ -414,6 +564,36 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 		if ev == nil {
 			return
 		}
+		db, project := e.persistState()
+		if db != nil && project != "" {
+			res, err := db.Record(project, *ev, backfill)
+			if err != nil {
+				return
+			}
+			if !res.Show {
+				e.store.Remove(res.Event.Hash)
+				return
+			}
+			e.store.Put(res.Event)
+			lastEvent = res.Event
+			if backfill {
+				backfillSeen = true
+				return
+			}
+			if backfillSeen {
+				backfillSeen = false
+				dirty = true
+			}
+			if res.IsNew {
+				e.mu.Lock()
+				n := e.notifier
+				e.mu.Unlock()
+				e.notifyCalls.Add(1)
+				n.NewError(res.Event)
+			}
+			dirty = true
+			return
+		}
 		res := e.store.Ingest(*ev)
 		lastEvent = res.Event
 		if backfill {
@@ -503,4 +683,16 @@ func (e *Engine) noteStatus(s source.Status) {
 		}
 	}
 	e.statuses = append(e.statuses, s)
+}
+
+func (e *Engine) pingInbox() {
+	items := e.store.List("")
+	var ev event.Event
+	if len(items) > 0 {
+		ev = items[0]
+	}
+	select {
+	case e.eventCh <- ev:
+	default:
+	}
 }

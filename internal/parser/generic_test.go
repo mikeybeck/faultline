@@ -93,6 +93,28 @@ func TestForTypeGeneric(t *testing.T) {
 	if _, ok := p.(*Generic); !ok {
 		t.Fatalf("got %T", p)
 	}
+	jp, err := ForType("json", "app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := jp.(*JSON); !ok {
+		t.Fatalf("got %T", jp)
+	}
+	cp, err := ForType("command", "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cp.(*Generic); !ok {
+		t.Fatalf("command parser %T", cp)
+	}
+}
+
+func TestGenericParsesJSONLine(t *testing.T) {
+	p := NewGeneric("app")
+	got := p.Feed(`{"level":"error","message":"json boom"}`)
+	if len(got) != 1 || got[0].Message != "json boom" {
+		t.Fatalf("got %+v", got)
+	}
 }
 
 func TestGenericLongGoPanicIsLinear(t *testing.T) {

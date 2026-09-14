@@ -3,6 +3,8 @@
 import {config} from '../models';
 import {main} from '../models';
 import {detect} from '../models';
+import {persist} from '../models';
+import {statefile} from '../models';
 
 export function ApplyAndWatch(arg1:config.Config,arg2:boolean):Promise<void>;
 
@@ -16,18 +18,40 @@ export function ClearMark():Promise<void>;
 
 export function DefaultConfig():Promise<config.Config>;
 
+export function DetectEditors():Promise<Array<string>>;
+
 export function DetectSources(arg1:string):Promise<Array<detect.Candidate>>;
+
+export function Dismiss(arg1:Array<string>):Promise<void>;
+
+export function DismissMatching(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function GetEvent(arg1:string):Promise<main.EventDTO>;
 
-export function GetState(arg1:string,arg2:string,arg3:string):Promise<main.AppState>;
+export function GetState(arg1:string,arg2:string,arg3:string,arg4:string):Promise<main.AppState>;
+
+export function Mute(arg1:string,arg2:string):Promise<void>;
+
+export function Mutes():Promise<Array<persist.Mute>>;
 
 export function NewProject():Promise<void>;
 
 export function OpenInEditor(arg1:string):Promise<void>;
 
+export function OpenPath(arg1:string,arg2:number):Promise<void>;
+
+export function OpenRecent(arg1:string):Promise<void>;
+
+export function PickEditor():Promise<string>;
+
 export function PickLogFile():Promise<string>;
 
 export function PickProjectDir():Promise<string>;
 
+export function RecentProjects():Promise<Array<statefile.Project>>;
+
 export function SaveAndWatch(arg1:string,arg2:config.Config,arg3:boolean):Promise<void>;
+
+export function SaveProjectConfig(arg1:config.Config):Promise<void>;
+
+export function Unmute(arg1:string,arg2:string):Promise<void>;

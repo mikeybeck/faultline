@@ -17,6 +17,9 @@ func TestSniffLaravelAndApacheAndGeneric(t *testing.T) {
 	if got := Sniff(filepath.Join(root, "generic_sample.log")); got != TypeGeneric {
 		t.Fatalf("generic sniff = %q", got)
 	}
+	if got := Sniff(filepath.Join(root, "json_sample.log")); got != TypeJSON {
+		t.Fatalf("json sniff = %q", got)
+	}
 }
 
 func TestScanDirFindsLogsAndSkipsVendor(t *testing.T) {

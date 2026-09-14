@@ -118,6 +118,20 @@ func (s *Store) Summaries(filter string) []event.Event {
 	return items
 }
 
+// CountsBySource returns the number of fingerprints per source.
+func (s *Store) CountsBySource() map[string]int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]int, 4)
+	for _, ev := range s.byHash {
+		if ev == nil {
+			continue
+		}
+		out[ev.Source]++
+	}
+	return out
+}
+
 // Get returns an event by hash.
 func (s *Store) Get(hash string) (event.Event, bool) {
 	s.mu.RLock()
@@ -148,9 +162,138 @@ func (s *Store) ByFrequency(filter string) []event.Event {
 	return items
 }
 
+// Put replaces the event for ev.Hash without incrementing count.
+func (s *Store) Put(ev event.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ev.Hash == "" {
+		ev.Hash = event.Fingerprint(ev.Source, ev.Type, ev.Message, ev.File, ev.Line)
+	}
+	clone := ev
+	if _, ok := s.byHash[ev.Hash]; !ok {
+		s.order = append([]string{ev.Hash}, s.order...)
+	}
+	s.byHash[ev.Hash] = &clone
+}
+
+// Load replaces the store with events (used when hydrating a project).
+func (s *Store) Load(events []event.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byHash = make(map[string]*event.Event, len(events))
+	s.order = make([]string, 0, len(events))
+	for _, ev := range events {
+		if ev.Hash == "" {
+			ev.Hash = event.Fingerprint(ev.Source, ev.Type, ev.Message, ev.File, ev.Line)
+		}
+		clone := ev
+		s.byHash[ev.Hash] = &clone
+		s.order = append(s.order, ev.Hash)
+	}
+}
+
+// Remove deletes fingerprints from the inbox.
+func (s *Store) Remove(hashes ...string) {
+	if len(hashes) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	drop := make(map[string]struct{}, len(hashes))
+	for _, h := range hashes {
+		if h == "" {
+			continue
+		}
+		drop[h] = struct{}{}
+		delete(s.byHash, h)
+	}
+	if len(drop) == 0 {
+		return
+	}
+	kept := s.order[:0]
+	for _, h := range s.order {
+		if _, ok := drop[h]; !ok {
+			kept = append(kept, h)
+		}
+	}
+	s.order = kept
+}
+
+// RemoveBySources deletes events whose Source is in names.
+func (s *Store) RemoveBySources(names ...string) {
+	if len(names) == 0 {
+		return
+	}
+	want := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		want[n] = struct{}{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := s.order[:0]
+	for _, h := range s.order {
+		ev := s.byHash[h]
+		if ev == nil {
+			continue
+		}
+		if _, ok := want[ev.Source]; ok {
+			delete(s.byHash, h)
+			continue
+		}
+		kept = append(kept, h)
+	}
+	s.order = kept
+}
+
+// MatchingHashes returns hashes that match inbox filters.
+func (s *Store) MatchingHashes(filter, severity, source, typ string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]string, 0, len(s.order))
+	for _, h := range s.order {
+		ev := s.byHash[h]
+		if ev == nil {
+			continue
+		}
+		if matchEvent(*ev, filter, severity, source, typ) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
 func matchesFilter(ev event.Event, filter string) bool {
 	hay := strings.ToLower(strings.Join([]string{
 		ev.Type, ev.Message, ev.File, ev.Source, string(ev.Severity),
 	}, " "))
 	return strings.Contains(hay, filter)
+}
+
+func matchEvent(ev event.Event, filter, severity, source, typ string) bool {
+	filter = strings.ToLower(strings.TrimSpace(filter))
+	if filter != "" && !matchesFilter(ev, filter) {
+		return false
+	}
+	sev := strings.ToLower(strings.TrimSpace(severity))
+	if sev != "" && sev != "all" {
+		want := map[string]struct{}{}
+		for _, part := range strings.Split(sev, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				want[part] = struct{}{}
+			}
+		}
+		if len(want) > 0 {
+			if _, ok := want[string(ev.Severity)]; !ok {
+				return false
+			}
+		}
+	}
+	if src := strings.TrimSpace(source); src != "" && ev.Source != src {
+		return false
+	}
+	if t := strings.TrimSpace(typ); t != "" && !strings.EqualFold(ev.Type, t) {
+		return false
+	}
+	return true
 }

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/mikey/faultline/internal/event"
@@ -19,6 +20,7 @@ const maxBody = 256 << 10
 type Options struct {
 	Name       string
 	ProjectDir string
+	ExtraHosts []string
 	Emit       func(event.Event)
 	OnStatus   func(source.Status)
 	Ready      func(addr string)
@@ -53,6 +55,24 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 	}
 
 	mux := http.NewServeMux()
+	connected := atomic.Bool{}
+	note := func(state source.State, msg string) {
+		report(opt, source.Status{
+			Name:    opt.Name,
+			Type:    "browser",
+			Path:    bound,
+			State:   state,
+			Message: msg,
+			Updated: time.Now(),
+		})
+	}
+	markConnected := func(msg string) {
+		first := !connected.Swap(true)
+		if first || msg == "received an error" {
+			note(source.StateOK, msg)
+		}
+	}
+
 	mux.HandleFunc("/ingest", func(w http.ResponseWriter, r *http.Request) {
 		cors(w)
 		if r.Method == http.MethodOptions {
@@ -73,6 +93,7 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		if opt.Emit != nil {
 			opt.Emit(ToEvent(opt.Name, opt.ProjectDir, p))
 		}
+		markConnected("received an error")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = io.WriteString(w, `{"ok":true}`)
@@ -83,8 +104,24 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		if !connected.Load() {
+			markConnected("extension connected")
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"ok":true}`)
+	})
+	mux.HandleFunc("/hosts", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		hosts := opt.ExtraHosts
+		if hosts == nil {
+			hosts = []string{}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"hosts": hosts, "addr": bound})
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -93,7 +130,7 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		}
 		cors(w)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = io.WriteString(w, "Faultline browser ingest\nPOST /ingest\n")
+		_, _ = io.WriteString(w, "Faultline browser ingest\nPOST /ingest\nGET /health\nGET /hosts\n")
 	})
 
 	srv := &http.Server{
@@ -106,8 +143,8 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		Name:    opt.Name,
 		Type:    "browser",
 		Path:    bound,
-		State:   source.StateOK,
-		Message: "extension → " + bound,
+		State:   source.StateWaiting,
+		Message: "listening — waiting for the extension",
 		Updated: time.Now(),
 	})
 

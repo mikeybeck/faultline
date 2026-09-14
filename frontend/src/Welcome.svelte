@@ -1,4 +1,6 @@
 <script>
+  import ProjectForm from './ProjectForm.svelte'
+
   export let projectDir = ''
   export let sources = []
   export let editorCommand = 'code'
@@ -6,27 +8,50 @@
   export let notifications = true
   export let sound = false
   export let fromStart = true
+  export let followLatest = false
   export let error = ''
   export let busy = false
+  export let recent = []
+  export let scannedEmpty = false
   export let onOpenFolder
   export let onAddFile
   export let onAddBrowser = () => {}
+  export let onAddCommand = () => {}
   export let onRemove
   export let onStart
   export let onSourceChange
-  export let actionLabel = 'Start watching'
+  export let onBrowseEditor = () => {}
+  export let onOpenRecent = () => {}
 
-  const builtins = ['code', 'cursor', 'phpstorm']
-  $: editorSelect = builtins.includes(editorCommand) ? editorCommand : 'custom'
+  function projectName(p) {
+    if (!p) return ''
+    const dir = p.dir || p.Dir || ''
+    const parts = dir.replace(/\\/g, '/').split('/').filter(Boolean)
+    return parts[parts.length - 1] || dir || (p.configPath || p.ConfigPath)
+  }
 </script>
 
 <div class="welcome">
   <div class="card">
     <h1>Faultline</h1>
-    <p class="lede">Watch any log file. Group repeats. Jump to the line in your editor. Browser errors arrive through the extension — nothing to add to your app.</p>
+    <p class="lede">Watch any log file or command. Group repeats. Jump to the line in your editor. Browser errors arrive through the extension — nothing to add to your app.</p>
 
     {#if error}
       <div class="banner">{error}</div>
+    {/if}
+
+    {#if recent.length && !projectDir}
+      <div class="field">
+        <span class="lbl">Recent projects</span>
+        <div class="recent-list">
+          {#each recent as p}
+            <button type="button" class="recent-item" on:click={() => onOpenRecent(p.configPath || p.ConfigPath)}>
+              <strong>{projectName(p)}</strong>
+              <span class="path">{p.dir || p.Dir}</span>
+            </button>
+          {/each}
+        </div>
+      </div>
     {/if}
 
     <div class="field">
@@ -36,69 +61,42 @@
     <div class="row-actions">
       <button class="btn" on:click={onOpenFolder}>Open folder</button>
       <button class="btn" on:click={onAddFile}>Add log file</button>
+      <button class="btn" on:click={onAddCommand}>Add command</button>
       <button class="btn" on:click={onAddBrowser}>Add browser source</button>
     </div>
 
-    <div class="field">
-      <span class="lbl">Log sources</span>
-      {#if sources.length === 0}
-        <p class="lede">No logs yet. Open a project folder to scan for <code>*.log</code> files, or add one yourself.</p>
-      {:else}
-        <div class="source-list">
-          {#each sources as src, i}
-            <div class="source-item">
-              <input value={src.name} on:input={(e) => onSourceChange(i, { name: e.target.value })} placeholder="name" />
-              <select value={src.type} on:change={(e) => onSourceChange(i, { type: e.target.value })}>
-                <option value="generic">generic</option>
-                <option value="laravel">laravel</option>
-                <option value="apache">apache</option>
-                <option value="browser">browser</option>
-              </select>
-              <div class="path" title={src.path}>{src.path}</div>
-              <button class="btn ghost danger" on:click={() => onRemove(i)}>Remove</button>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
-
-    <div class="field">
-      <label for="editor-select">Editor</label>
-      <select
-        id="editor-select"
-        value={editorSelect}
-        on:change={(e) => {
-          const v = e.target.value
-          if (v === 'custom') onSourceChange(-1, { editor: customEditor || 'code' })
-          else onSourceChange(-1, { editor: v })
-        }}
-      >
-        <option value="code">VS Code</option>
-        <option value="cursor">Cursor</option>
-        <option value="phpstorm">PhpStorm</option>
-        <option value="custom">Custom command</option>
-      </select>
-    </div>
-    {#if editorSelect === 'custom'}
-      <div class="field">
-        <label for="custom-editor">Command — use {'{file}'} and {'{line}'}</label>
-        <input
-          id="custom-editor"
-          value={customEditor}
-          placeholder="nvim +{line} {file}"
-          on:input={(e) => onSourceChange(-1, { editor: e.target.value, custom: true })}
-        />
+    {#if scannedEmpty}
+      <div class="callout">
+        <strong>No log files found.</strong>
+        Most local apps print to the terminal. Add a command source such as <code>npm run dev</code> or <code>docker compose logs -f</code>, or capture page errors with the browser extension.
       </div>
     {/if}
 
-    <div class="toggles">
-      <label><input type="checkbox" bind:checked={notifications} /> Desktop notifications</label>
-      <label><input type="checkbox" bind:checked={sound} /> Sound</label>
-      <label><input type="checkbox" bind:checked={fromStart} /> Load existing log lines</label>
-    </div>
+    <ProjectForm
+      {sources}
+      {editorCommand}
+      {customEditor}
+      bind:notifications
+      bind:sound
+      bind:fromStart
+      bind:followLatest
+      {onSourceChange}
+      {onRemove}
+      {onBrowseEditor}
+    />
+
+    <details class="help-ext">
+      <summary>Browser extension</summary>
+      <ol>
+        <li>Chrome / Edge: <code>chrome://extensions</code> → Developer mode → Load unpacked → select the <code>extension/</code> folder in this repo.</li>
+        <li>Firefox 128+: <code>about:debugging#/runtime/this-firefox</code> → Load Temporary Add-on → <code>extension/manifest.json</code>.</li>
+        <li>Open your app on localhost. The inbox pill turns green when the extension connects.</li>
+      </ol>
+      <p class="hint">Custom hosts (not localhost) go in Settings after you start, or in the extension’s Options page.</p>
+    </details>
 
     <button class="btn primary" disabled={busy || sources.length === 0 || !projectDir} on:click={onStart}>
-      {busy ? 'Working…' : actionLabel}
+      {busy ? 'Working…' : 'Start watching'}
     </button>
   </div>
 </div>

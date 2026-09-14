@@ -1,8 +1,8 @@
 # Faultline
 
-Local error inbox for any project that writes log files.
+Local error inbox for any project that writes logs — or prints them to a terminal.
 
-Faultline watches logs, parses them into structured events, groups duplicates, and lets you jump to the offending `file:line` in your editor. The desktop app is the main interface; a terminal UI is still available.
+Faultline watches log files and command output, parses them into structured events, groups duplicates, and lets you jump to the offending `file:line` in your editor. Browser page errors arrive through an unpacked extension. The desktop app is the main interface; a terminal UI is still available.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -42,13 +42,13 @@ Requires Go 1.22+. On Linux, desktop notifications use `notify-send` (libnotify)
 ## Quick start (desktop)
 
 1. Run `faultline` (or `wails dev` while developing).
-2. **Open folder** — Faultline scans for `*.log` files (skipping `node_modules`, `vendor`, `.git`, …) and guesses the format.
-3. Or **Add log file** for any path, including a file that does not exist yet.
-4. Optional: **Add browser source** if you only want frontend errors (no log file). Browser capture also starts automatically whenever you are watching.
-5. Choose your editor, then **Start watching**.
-6. Load the browser extension (see below) so page errors show up in the inbox.
+2. **Open folder** — Faultline scans for `*.log` files (skipping `node_modules`, `vendor`, `.git`, …) and guesses the format (including JSON logs).
+3. If nothing is found, **Add command** (`npm run dev`, `docker compose logs -f`, …) or **Add browser source**.
+4. Or **Add log file** for any path, including a file that does not exist yet.
+5. Choose your editor (installed editors are detected), then **Start watching**.
+6. Load the browser extension (Welcome has the steps) so page errors show up in the inbox.
 
-Settings are saved as `faultline.yaml` in the project folder. The last project is remembered.
+Settings are saved as `faultline.yaml` in the project folder. Recent projects are remembered.
 
 Existing log lines are ingested on start, then new lines are followed. Pass `--tail` to skip what is already in the file.
 
@@ -71,12 +71,14 @@ faultline --tui --config ./faultline.yaml --tail
 | `↓` / `j` | Move down |
 | `Enter` | Toggle detail view |
 | `o` | Open in editor |
-| `c` | Clear all events |
+| `d` | Dismiss until it happens again |
+| `c` | Mark inbox clean |
+| `R` | Replay log files |
 | `/` | Filter |
 | `s` | Toggle sort by frequency |
 | `q` | Quit |
 
-Desktop shortcuts (inbox): `/` search, `o` open, `c` clear.
+Desktop shortcuts (inbox): `/` search, `j`/`k` or arrows move, `Enter` focus detail, `o` open, `d` dismiss, `c` mark clean, `s` sort, `?` help.
 
 ## Browser errors
 
@@ -87,7 +89,7 @@ Load it unpacked (the folder is `extension/` in this repo):
 - **Chrome / Edge / Chromium:** `chrome://extensions` → Developer mode → Load unpacked → select `extension/`
 - **Firefox 128+:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `extension/manifest.json`
 
-It injects into local origins (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.ddev.site`, `*.lndo.site`). Custom names such as `localphishingbox.com` are not included by default — add them under the extension’s **Options** (one host per line, e.g. `localphishingbox.com`). Uncaught errors and unhandled promise rejections are sent to Faultline; if Faultline is not running the requests fail silently.
+It injects into local origins (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.ddev.site`, `*.lndo.site`). Custom names such as `localphishingbox.com` are not included by default — add them under **Settings → Extra browser hosts** (Faultline serves them at `http://127.0.0.1:9477/hosts`) or the extension’s **Options**. Uncaught errors, unhandled promise rejections, and errors a framework swallows then prints with `console.error` (Vue `v-on` handlers, for example) are sent to Faultline; if Faultline is not running the requests fail silently.
 
 A `browser` source in `faultline.yaml` is optional (custom listen address, or a browser-only project with no log files):
 
@@ -96,25 +98,43 @@ sources:
   - name: browser
     type: browser
     path: 127.0.0.1:9477
+browser:
+  extraHosts:
+    - localphishingbox.com
 ```
 
 ## What it does
 
 | Capability | Details |
 |---|---|
-| Sources | Any `*.log` file (`generic`), plus Laravel Monolog, Apache error logs, and browser errors via the extension |
+| Sources | Log files (`generic`, `json`, Laravel, Apache), command stdout/stderr, and browser errors via the extension |
 | Structured events | type, message, file, line, severity, stack, counts |
 | Dedup | fingerprints group repeats (`×N`, first/last seen) |
-| Desktop UI | source health, split inbox + detail, filter, severity, sort |
+| Desktop UI | source health, split inbox + detail, filter, severity, sort, clickable stacks |
 | Notifications | desktop alert on **new** fingerprints only |
 | Editor | opens VS Code / Cursor / PhpStorm / custom command at file:line |
-| Browser | unpacked extension posts `window.onerror` / `unhandledrejection` to `127.0.0.1:9477` |
+| Browser | unpacked extension posts `window.onerror` / `unhandledrejection` / `console.error(Error)` to `127.0.0.1:9477` |
 
 ## Log formats
 
 ### Generic (default)
 
-Error-like lines (`error`, `fatal`, `panic`, `exception`, `traceback`, `warn`, …) with common stacks from Node, Python, Go, Java, PHP, and Ruby. Info/debug noise is skipped. `file:line` is extracted when present.
+Error-like lines (`error`, `fatal`, `panic`, `exception`, `traceback`, `warn`, …) with common stacks from Node, Python, Go, Java, PHP, and Ruby. Info/debug noise is skipped. `file:line` is extracted when present. JSON lines (Pino, Winston, Zap) in a mixed stream are parsed too.
+
+### JSON
+
+Newline-delimited JSON logs. Levels may be strings (`error`, `warn`) or Pino numbers (`50`, `40`). Nested `err` / `error` objects supply type, message, and stack.
+
+### Command
+
+`type: command` runs a shell command in the project folder and parses stdout/stderr with the generic parser:
+
+```yaml
+sources:
+  - name: vite
+    type: command
+    path: npm run dev
+```
 
 ### Laravel
 
@@ -192,6 +212,5 @@ wails build -tags webkit2_41
 
 ## Roadmap ideas
 
-- Docker Compose / `npm run dev` command sources
 - Clickable notification → editor (platform-specific)
 - Sound themes and saved views

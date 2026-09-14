@@ -13,13 +13,20 @@ type Config struct {
 	Sources       []SourceConfig `yaml:"sources" json:"sources"`
 	Notifications NotifyConfig   `yaml:"notifications" json:"notifications"`
 	Editor        EditorConfig   `yaml:"editor" json:"editor"`
+	Inbox         InboxConfig    `yaml:"inbox,omitempty" json:"inbox"`
+	Browser       BrowserConfig  `yaml:"browser,omitempty" json:"browser"`
 }
 
 // SourceConfig describes a single log source.
 type SourceConfig struct {
 	Name string `yaml:"name" json:"name"`
-	Type string `yaml:"type" json:"type"` // generic | laravel | apache | browser
-	Path string `yaml:"path" json:"path"`
+	Type string `yaml:"type" json:"type"` // generic | laravel | apache | json | browser | command
+	Path string `yaml:"path" json:"path"` // file path, ingest addr, or shell command
+}
+
+// BrowserConfig is project-wide browser ingest extras.
+type BrowserConfig struct {
+	ExtraHosts []string `yaml:"extraHosts,omitempty" json:"extraHosts"`
 }
 
 // NotifyConfig controls desktop notifications.
@@ -28,10 +35,16 @@ type NotifyConfig struct {
 	Sound   bool `yaml:"sound" json:"sound"`
 }
 
+// InboxConfig controls desktop inbox behavior.
+type InboxConfig struct {
+	// FollowLatest always selects the newest error as it arrives.
+	FollowLatest bool `yaml:"followLatest" json:"followLatest"`
+}
+
 // EditorConfig controls opening files at a location.
 type EditorConfig struct {
-	// Command is one of: code, phpstorm, or a custom template containing
-	// {file} and optionally {line}.
+	// Command is one of: code, cursor, phpstorm; a full path to an
+	// executable; or a custom template containing {file} and optionally {line}.
 	Command string `yaml:"command" json:"command"`
 }
 
@@ -105,15 +118,25 @@ func (c *Config) Validate() error {
 		switch s.Type {
 		case "browser":
 			continue
-		case "generic", "laravel", "apache":
+		case "generic", "laravel", "apache", "json", "command":
 		default:
-			return fmt.Errorf("config: sources[%d].type must be generic, laravel, apache, or browser, got %q", i, s.Type)
+			return fmt.Errorf("config: sources[%d].type must be generic, laravel, apache, json, browser, or command, got %q", i, s.Type)
 		}
 		if s.Path == "" {
 			return fmt.Errorf("config: sources[%d].path is required", i)
 		}
 	}
 	return nil
+}
+
+// IsFileSource reports whether typ tails a log file (not browser or command).
+func IsFileSource(typ string) bool {
+	switch typ {
+	case "generic", "laravel", "apache", "json", "":
+		return true
+	default:
+		return false
+	}
 }
 
 // DefaultEnabledNotifications returns a notify config with notifications on.

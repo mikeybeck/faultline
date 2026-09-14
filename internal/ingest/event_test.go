@@ -80,6 +80,31 @@ func TestResolveFileViteFS(t *testing.T) {
 	}
 }
 
+func TestResolveFileByBasename(t *testing.T) {
+	dir := t.TempDir()
+	full := filepath.Join(dir, "src", "components", "Pay.js")
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := ResolveFile("http://localhost:5173/assets/Pay.js", dir)
+	if got != full {
+		t.Fatalf("got %q want %q", got, full)
+	}
+}
+
+func TestParseFramesResolves(t *testing.T) {
+	frames := ParseFrames("TypeError: x\n    at checkout (http://localhost:5173/src/payments.js:81:12)", "")
+	if len(frames) != 2 {
+		t.Fatalf("frames = %d", len(frames))
+	}
+	if frames[1].File != "src/payments.js" || frames[1].Line != 81 {
+		t.Fatalf("frame = %+v", frames[1])
+	}
+}
+
 func TestToEventSkipsNoisyFrames(t *testing.T) {
 	p := Payload{
 		Type:    "Error",

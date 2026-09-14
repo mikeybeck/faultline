@@ -12,9 +12,12 @@ import (
 
 	"github.com/mikey/faultline/internal/config"
 	"github.com/mikey/faultline/internal/detect"
+	"github.com/mikey/faultline/internal/editor"
 	"github.com/mikey/faultline/internal/engine"
 	"github.com/mikey/faultline/internal/event"
+	"github.com/mikey/faultline/internal/ingest"
 	"github.com/mikey/faultline/internal/mark"
+	"github.com/mikey/faultline/internal/persist"
 	"github.com/mikey/faultline/internal/source"
 	"github.com/mikey/faultline/internal/statefile"
 )
@@ -33,6 +36,9 @@ type App struct {
 func NewApp(configPath string, fromStart bool) *App {
 	eng := engine.New()
 	eng.UseMarks(mark.Default())
+	if db, err := persist.Default(); err == nil {
+		eng.UsePersist(db)
+	}
 	return &App{
 		eng:           eng,
 		flagConfig:    configPath,
@@ -57,7 +63,7 @@ func (a *App) startup(ctx context.Context) {
 		if err := a.eng.Start(ctx, cfg, a.fromStart); err != nil {
 			runtime.LogError(ctx, err.Error())
 		}
-		_ = statefile.Save(statefile.State{ProjectDir: a.projectDir, ConfigPath: a.configPath})
+		_ = statefile.Remember(a.projectDir, a.configPath)
 		return
 	}
 
@@ -78,10 +84,12 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.eng.Start(ctx, cfg, a.fromStart); err != nil {
 		runtime.LogError(ctx, err.Error())
 	}
+	_ = statefile.Remember(a.projectDir, a.configPath)
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	a.eng.Stop()
+	a.eng.ClosePersist()
 }
 
 func (a *App) relay() {
@@ -105,12 +113,15 @@ func (a *App) relay() {
 
 // Bootstrap is the initial UI payload.
 type Bootstrap struct {
-	Screen     string         `json:"screen"`
-	ProjectDir string         `json:"projectDir"`
-	ConfigPath string         `json:"configPath"`
-	Config     *config.Config `json:"config"`
-	FromStart  bool           `json:"fromStart"`
-	Running    bool           `json:"running"`
+	Screen     string              `json:"screen"`
+	ProjectDir string              `json:"projectDir"`
+	ConfigPath string              `json:"configPath"`
+	Config     *config.Config      `json:"config"`
+	FromStart  bool                `json:"fromStart"`
+	Running    bool                `json:"running"`
+	Recent     []statefile.Project `json:"recent"`
+	Editors    []string            `json:"editors"`
+	IngestAddr string              `json:"ingestAddr"`
 }
 
 func (a *App) Bootstrap() Bootstrap {
@@ -126,27 +137,37 @@ func (a *App) Bootstrap() Bootstrap {
 		Config:     cfg,
 		FromStart:  a.fromStart,
 		Running:    a.eng.Running(),
+		Recent:     statefile.RecentProjects(),
+		Editors:    editor.Installed(),
+		IngestAddr: a.eng.BoundIngest(),
 	}
 }
 
 func (a *App) DefaultConfig() config.Config {
 	return config.Config{
 		Notifications: config.DefaultEnabledNotifications(),
-		Editor:        config.EditorConfig{Command: "code"},
+		Editor:        config.EditorConfig{Command: editor.PreferredCommand()},
 	}
 }
 
 // AppState is a snapshot of the inbox.
 type AppState struct {
-	Events  []EventDTO      `json:"events"`
-	Sources []source.Status `json:"sources"`
-	Running bool            `json:"running"`
-	Total   int             `json:"total"`
-	Marked  bool            `json:"marked"`
+	Events       []EventDTO      `json:"events"`
+	Sources      []source.Status `json:"sources"`
+	Running      bool            `json:"running"`
+	Total        int             `json:"total"`
+	Marked       bool            `json:"marked"`
+	IngestAddr   string          `json:"ingestAddr"`
+	SourceCounts map[string]int  `json:"sourceCounts"`
 }
 
-func (a *App) GetState(filter, sort, severity string) AppState {
-	st := AppState{Sources: a.eng.SnapshotStatuses(), Running: a.eng.Running()}
+func (a *App) GetState(filter, sort, severity, source string) AppState {
+	st := AppState{
+		Sources:      a.eng.SnapshotStatuses(),
+		Running:      a.eng.Running(),
+		IngestAddr:   a.eng.BoundIngest(),
+		SourceCounts: a.eng.Store().CountsBySource(),
+	}
 	var items []event.Event
 	if sort == "frequency" {
 		items = a.eng.Store().ByFrequency(filter)
@@ -160,6 +181,7 @@ func (a *App) GetState(filter, sort, severity string) AppState {
 		}
 	}
 	sev := strings.ToLower(strings.TrimSpace(severity))
+	src := strings.TrimSpace(source)
 	st.Events = make([]EventDTO, 0, len(items))
 	for _, ev := range items {
 		if sev != "" && sev != "all" {
@@ -174,6 +196,9 @@ func (a *App) GetState(filter, sort, severity string) AppState {
 				continue
 			}
 		}
+		if src != "" && ev.Source != src {
+			continue
+		}
 		st.Events = append(st.Events, toSummaryDTO(ev))
 	}
 	st.Total = len(st.Events)
@@ -186,14 +211,14 @@ func (a *App) GetEvent(hash string) (EventDTO, error) {
 	if !ok {
 		return EventDTO{}, fmt.Errorf("unknown event")
 	}
-	return toDTO(ev), nil
+	return toDTO(ev, a.projectDir), nil
 }
 
 func (a *App) Clear() {
 	a.eng.Clear()
 }
 
-// ClearMark forgets the resume point and re-reads logs from the beginning.
+// ClearMark forgets file resume points and re-reads logs. Browser events are kept.
 func (a *App) ClearMark() {
 	cfg := a.eng.Config()
 	running := a.eng.Running()
@@ -203,12 +228,74 @@ func (a *App) ClearMark() {
 	}
 }
 
+func (a *App) Dismiss(hashes []string) {
+	a.eng.Dismiss(hashes)
+}
+
+func (a *App) DismissMatching(filter, severity, source, typ string) {
+	a.eng.DismissMatching(filter, severity, source, typ)
+}
+
+func (a *App) Mute(kind, value string) error {
+	return a.eng.Mute(kind, value)
+}
+
+func (a *App) Unmute(kind, value string) error {
+	return a.eng.Unmute(kind, value)
+}
+
+func (a *App) Mutes() []persist.Mute {
+	m := a.eng.Mutes()
+	if m == nil {
+		return []persist.Mute{}
+	}
+	return m
+}
+
 func (a *App) OpenInEditor(hash string) error {
 	ev, ok := a.eng.Store().Get(hash)
 	if !ok {
 		return fmt.Errorf("unknown event")
 	}
 	return a.eng.Open(ev.File, ev.Line)
+}
+
+func (a *App) OpenPath(file string, line int) error {
+	file = strings.TrimSpace(file)
+	if file == "" {
+		return fmt.Errorf("no file associated with this location")
+	}
+	if a.projectDir != "" {
+		file = ingest.ResolveFile(file, a.projectDir)
+	}
+	return a.eng.Open(file, line)
+}
+
+func (a *App) RecentProjects() []statefile.Project {
+	return statefile.RecentProjects()
+}
+
+func (a *App) OpenRecent(configPath string) error {
+	configPath = strings.TrimSpace(configPath)
+	if configPath == "" {
+		return fmt.Errorf("no project selected")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(configPath)
+	a.projectDir = dir
+	a.configPath = configPath
+	a.eng.SetProjectDir(dir)
+	if err := a.eng.Restart(a.ctx, cfg, a.fromStart); err != nil {
+		return err
+	}
+	return statefile.Remember(dir, configPath)
+}
+
+func (a *App) DetectEditors() []string {
+	return editor.Installed()
 }
 
 func (a *App) PickProjectDir() (string, error) {
@@ -230,6 +317,33 @@ func (a *App) PickLogFile() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+func (a *App) PickEditor() (string, error) {
+	opts := runtime.OpenDialogOptions{
+		Title: "Choose editor executable",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Executables", Pattern: "*.exe;*.cmd;*.bat;*"},
+			{DisplayName: "All files", Pattern: "*.*"},
+		},
+	}
+	if os.Getenv("OS") == "Windows_NT" {
+		if local := os.Getenv("LOCALAPPDATA"); local != "" {
+			scripts := filepath.Join(local, "JetBrains", "Toolbox", "scripts")
+			if st, err := os.Stat(scripts); err == nil && st.IsDir() {
+				opts.DefaultDirectory = scripts
+			}
+		}
+		if opts.DefaultDirectory == "" {
+			if pf := os.Getenv("ProgramFiles"); pf != "" {
+				jetbrains := filepath.Join(pf, "JetBrains")
+				if st, err := os.Stat(jetbrains); err == nil && st.IsDir() {
+					opts.DefaultDirectory = jetbrains
+				}
+			}
+		}
+	}
+	return runtime.OpenFileDialog(a.ctx, opts)
 }
 
 func (a *App) DetectSources(dir string) ([]detect.Candidate, error) {
@@ -270,7 +384,7 @@ func (a *App) SaveAndWatch(projectDir string, cfg config.Config, fromStart bool)
 	if err := a.eng.Restart(a.ctx, &cfg, fromStart); err != nil {
 		return err
 	}
-	return statefile.Save(statefile.State{ProjectDir: projectDir, ConfigPath: path})
+	return statefile.Remember(projectDir, path)
 }
 
 func (a *App) ApplyAndWatch(cfg config.Config, fromStart bool) error {
@@ -280,34 +394,51 @@ func (a *App) ApplyAndWatch(cfg config.Config, fromStart bool) error {
 	return a.SaveAndWatch(a.projectDir, cfg, fromStart)
 }
 
+// SaveProjectConfig writes faultline.yaml without restarting watchers.
+func (a *App) SaveProjectConfig(cfg config.Config) error {
+	if a.projectDir == "" {
+		return fmt.Errorf("no project folder")
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	path := filepath.Join(a.projectDir, "faultline.yaml")
+	if err := config.Save(path, &cfg); err != nil {
+		return err
+	}
+	a.configPath = path
+	return nil
+}
+
 func (a *App) NewProject() {
 	a.eng.Stop()
-	a.eng.Clear()
+	a.eng.ResetInbox()
 	a.projectDir = ""
 	a.configPath = ""
 }
 
 // EventDTO is the JSON shape sent to the frontend.
 type EventDTO struct {
-	Source    string `json:"source"`
-	Time      string `json:"time"`
-	Type      string `json:"type"`
-	Message   string `json:"message"`
-	File      string `json:"file"`
-	Line      int    `json:"line"`
-	Severity  string `json:"severity"`
-	Stack     string `json:"stack"`
-	Raw       string `json:"raw"`
-	Hash      string `json:"hash"`
-	Count     int    `json:"count"`
-	FirstSeen string `json:"firstSeen"`
-	LastSeen  string `json:"lastSeen"`
-	Title     string `json:"title"`
-	Location  string `json:"location"`
+	Source    string         `json:"source"`
+	Time      string         `json:"time"`
+	Type      string         `json:"type"`
+	Message   string         `json:"message"`
+	File      string         `json:"file"`
+	Line      int            `json:"line"`
+	Severity  string         `json:"severity"`
+	Stack     string         `json:"stack"`
+	Raw       string         `json:"raw"`
+	Hash      string         `json:"hash"`
+	Count     int            `json:"count"`
+	FirstSeen string         `json:"firstSeen"`
+	LastSeen  string         `json:"lastSeen"`
+	Title     string         `json:"title"`
+	Location  string         `json:"location"`
+	Frames    []ingest.Frame `json:"frames"`
 }
 
-func toDTO(ev event.Event) EventDTO {
-	return EventDTO{
+func toDTO(ev event.Event, projectDir string) EventDTO {
+	d := EventDTO{
 		Source:    ev.Source,
 		Time:      formatTime(ev.Time),
 		Type:      ev.Type,
@@ -324,12 +455,20 @@ func toDTO(ev event.Event) EventDTO {
 		Title:     ev.Title(),
 		Location:  ev.Location(),
 	}
+	if ev.Stack != "" {
+		d.Frames = ingest.ParseFrames(ev.Stack, projectDir)
+	}
+	if d.Frames == nil {
+		d.Frames = []ingest.Frame{}
+	}
+	return d
 }
 
 func toSummaryDTO(ev event.Event) EventDTO {
-	d := toDTO(ev)
+	d := toDTO(ev, "")
 	d.Stack = ""
 	d.Raw = ""
+	d.Frames = []ingest.Frame{}
 	return d
 }
 

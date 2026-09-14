@@ -26,16 +26,36 @@ export function DefaultConfig() {
   return window['go']['main']['App']['DefaultConfig']();
 }
 
+export function DetectEditors() {
+  return window['go']['main']['App']['DetectEditors']();
+}
+
 export function DetectSources(arg1) {
   return window['go']['main']['App']['DetectSources'](arg1);
+}
+
+export function Dismiss(arg1) {
+  return window['go']['main']['App']['Dismiss'](arg1);
+}
+
+export function DismissMatching(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DismissMatching'](arg1, arg2, arg3, arg4);
 }
 
 export function GetEvent(arg1) {
   return window['go']['main']['App']['GetEvent'](arg1);
 }
 
-export function GetState(arg1, arg2, arg3) {
-  return window['go']['main']['App']['GetState'](arg1, arg2, arg3);
+export function GetState(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetState'](arg1, arg2, arg3, arg4);
+}
+
+export function Mute(arg1, arg2) {
+  return window['go']['main']['App']['Mute'](arg1, arg2);
+}
+
+export function Mutes() {
+  return window['go']['main']['App']['Mutes']();
 }
 
 export function NewProject() {
@@ -46,6 +66,18 @@ export function OpenInEditor(arg1) {
   return window['go']['main']['App']['OpenInEditor'](arg1);
 }
 
+export function OpenPath(arg1, arg2) {
+  return window['go']['main']['App']['OpenPath'](arg1, arg2);
+}
+
+export function OpenRecent(arg1) {
+  return window['go']['main']['App']['OpenRecent'](arg1);
+}
+
+export function PickEditor() {
+  return window['go']['main']['App']['PickEditor']();
+}
+
 export function PickLogFile() {
   return window['go']['main']['App']['PickLogFile']();
 }
@@ -54,6 +86,18 @@ export function PickProjectDir() {
   return window['go']['main']['App']['PickProjectDir']();
 }
 
+export function RecentProjects() {
+  return window['go']['main']['App']['RecentProjects']();
+}
+
 export function SaveAndWatch(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveAndWatch'](arg1, arg2, arg3);
+}
+
+export function SaveProjectConfig(arg1) {
+  return window['go']['main']['App']['SaveProjectConfig'](arg1);
+}
+
+export function Unmute(arg1, arg2) {
+  return window['go']['main']['App']['Unmute'](arg1, arg2);
 }

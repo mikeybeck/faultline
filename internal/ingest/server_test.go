@@ -88,6 +88,38 @@ func TestServeIngest(t *testing.T) {
 	}
 }
 
+func TestServeHosts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ready := make(chan string, 1)
+	go func() {
+		_, _ = Serve(ctx, "127.0.0.1:0", Options{
+			ExtraHosts: []string{"localphishingbox.com"},
+			Ready:      func(addr string) { ready <- addr },
+		})
+	}()
+	var bound string
+	select {
+	case bound = <-ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not start")
+	}
+	resp, err := http.Get("http://" + bound + "/hosts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var payload struct {
+		Hosts []string `json:"hosts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Hosts) != 1 || payload.Hosts[0] != "localphishingbox.com" {
+		t.Fatalf("hosts = %#v", payload.Hosts)
+	}
+}
+
 func TestServeDisabled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

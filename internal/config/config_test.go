@@ -58,9 +58,11 @@ func TestValidateRejectsBadType(t *testing.T) {
 	}
 }
 
-func TestValidateAcceptsGeneric(t *testing.T) {
-	cfg := &Config{Sources: []SourceConfig{{Type: "generic", Path: "app.log"}}}
-	if err := cfg.Validate(); err != nil {
+func TestValidateAcceptsCommandAndJSON(t *testing.T) {
+	if err := (&Config{Sources: []SourceConfig{{Type: "command", Path: "npm run dev"}}}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&Config{Sources: []SourceConfig{{Type: "json", Path: "app.log"}}}).Validate(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -92,5 +94,24 @@ func TestSaveRoundTrip(t *testing.T) {
 	}
 	if len(got.Sources) != 1 || got.Sources[0].Type != "generic" {
 		t.Fatalf("round trip = %+v", got.Sources)
+	}
+}
+
+func TestSaveRoundTripFollowLatest(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "faultline.yaml")
+	cfg := &Config{
+		Sources: []SourceConfig{{Name: "app", Type: "generic", Path: "logs/app.log"}},
+		Inbox:   InboxConfig{FollowLatest: true},
+	}
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Inbox.FollowLatest {
+		t.Fatal("followLatest was not saved")
 	}
 }

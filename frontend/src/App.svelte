@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import Welcome from './Welcome.svelte'
   import Inbox from './Inbox.svelte'
+  import Settings from './Settings.svelte'
   import {
     ApplyAndWatch,
     Bootstrap,
@@ -10,13 +11,23 @@
     ClearMark,
     DefaultConfig,
     DetectSources,
+    Dismiss,
+    DismissMatching,
     GetEvent,
     GetState,
+    Mute,
+    Mutes,
     NewProject,
     OpenInEditor,
+    OpenPath,
+    OpenRecent,
+    PickEditor,
     PickLogFile,
     PickProjectDir,
+    RecentProjects,
     SaveAndWatch,
+    SaveProjectConfig,
+    Unmute,
   } from '../wailsjs/go/main/App.js'
   import { EventsOn } from '../wailsjs/runtime/runtime.js'
 
@@ -28,28 +39,56 @@
   let notifications = true
   let sound = false
   let fromStart = true
+  let followLatest = false
+  let extraHostsText = ''
   let error = ''
   let busy = false
   let settingsOpen = false
+  let helpOpen = false
+  let scannedEmpty = false
+  let recent = []
+  let dismissMenus = 0
 
   let events = []
   let sourceStatuses = []
+  let sourceCounts = {}
+  let ingestAddr = ''
   let filter = ''
   let severity = 'all'
+  let sourceFilter = ''
   let sort = 'recent'
   let selected = null
   let statusMsg = ''
   let total = 0
   let marked = false
+  let mutes = []
   let refreshTimer
   let refreshBusy = false
   let refreshQueued = false
+  let toastTimer
+
+  function toast(msg) {
+    statusMsg = msg
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => {
+      if (statusMsg === msg) statusMsg = ''
+    }, 2800)
+  }
+
+  function hostsFromText(text) {
+    return String(text || '')
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s && !s.startsWith('#'))
+  }
 
   function cfgFromForm() {
     return {
       sources: sources.map((s) => ({ name: s.name, type: s.type, path: s.path })),
       notifications: { enabled: notifications, sound },
       editor: { command: editorCommand },
+      inbox: { followLatest },
+      browser: { extraHosts: hostsFromText(extraHostsText) },
     }
   }
 
@@ -59,18 +98,44 @@
     notifications = !!(cfg.notifications && cfg.notifications.enabled)
     sound = !!(cfg.notifications && cfg.notifications.sound)
     editorCommand = (cfg.editor && cfg.editor.command) || 'code'
+    followLatest = !!(cfg.inbox && cfg.inbox.followLatest)
+    extraHostsText = ((cfg.browser && cfg.browser.extraHosts) || []).join('\n')
     if (!['code', 'cursor', 'phpstorm'].includes(editorCommand)) {
       customEditor = editorCommand
     }
   }
 
+  function newestEvent(list) {
+    if (!list || !list.length) return null
+    return list.reduce((best, ev) => {
+      if (!best) return ev
+      return (ev.lastSeen || '') > (best.lastSeen || '') ? ev : best
+    }, null)
+  }
+
   async function refresh() {
-    const st = await GetState(filter, sort, severity)
+    const st = await GetState(filter, sort, severity, sourceFilter)
     events = st.events || []
     total = st.total || events.length
     marked = !!st.marked
     sourceStatuses = st.sources || []
-    if (selected) {
+    sourceCounts = st.sourceCounts || {}
+    ingestAddr = st.ingestAddr || ''
+    if (followLatest && events.length) {
+      const latest = newestEvent(events)
+      if (latest && (!selected || selected.hash !== latest.hash)) {
+        await selectEvent(latest)
+      } else if (latest && selected) {
+        selected = {
+          ...selected,
+          ...latest,
+          stack: selected.stack,
+          raw: selected.raw,
+          message: selected.message || latest.message,
+          frames: selected.frames,
+        }
+      }
+    } else if (selected) {
       const next = events.find((e) => e.hash === selected.hash)
       if (next) {
         selected = {
@@ -79,7 +144,10 @@
           stack: selected.stack,
           raw: selected.raw,
           message: selected.message || next.message,
+          frames: selected.frames,
         }
+      } else {
+        selected = null
       }
     } else if (events.length) {
       await selectEvent(events[0])
@@ -113,7 +181,29 @@
     try {
       selected = await GetEvent(ev.hash)
     } catch (e) {
-      statusMsg = String(e)
+      toast(String(e))
+    }
+  }
+
+  async function selectFromKeyboard(ev) {
+    if (followLatest) {
+      followLatest = false
+      if (projectDir) {
+        try {
+          await SaveProjectConfig(cfgFromForm())
+        } catch (e) {
+          toast(String(e))
+        }
+      }
+    }
+    await selectEvent(ev)
+  }
+
+  async function loadRecent() {
+    try {
+      recent = (await RecentProjects()) || []
+    } catch {
+      recent = []
     }
   }
 
@@ -121,6 +211,8 @@
     const b = await Bootstrap()
     projectDir = b.projectDir || ''
     fromStart = b.fromStart !== false
+    recent = b.recent || []
+    ingestAddr = b.ingestAddr || ''
     if (b.config) applyConfig(b.config)
     else {
       const d = await DefaultConfig()
@@ -130,23 +222,104 @@
     if (screen === 'inbox') await refresh()
   }
 
+  function typingTarget(el) {
+    if (!el) return false
+    const tag = el.tagName
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
+  }
+
+  function moveSelection(delta) {
+    if (!events.length) return
+    const i = selected ? events.findIndex((e) => e.hash === selected.hash) : -1
+    let next = i + delta
+    if (i < 0) next = delta > 0 ? 0 : events.length - 1
+    if (next < 0) next = 0
+    if (next >= events.length) next = events.length - 1
+    const ev = events[next]
+    if (ev) selectFromKeyboard(ev)
+  }
+
   onMount(() => {
     load()
     EventsOn('inbox:changed', scheduleRefresh)
     EventsOn('status', scheduleRefresh)
     const onKey = (e) => {
-      if (e.key === '/' && screen === 'inbox' && document.activeElement.tagName !== 'INPUT') {
+      if (e.key === 'Escape') {
+        if (helpOpen) {
+          helpOpen = false
+          return
+        }
+        dismissMenus += 1
+        if (settingsOpen) {
+          settingsOpen = false
+          return
+        }
+        const active = document.activeElement
+        if (active && active.classList && active.classList.contains('search')) {
+          if (filter) {
+            filter = ''
+            scheduleRefresh()
+          }
+          active.blur()
+          return
+        }
+        if (active && active.classList && active.classList.contains('detail')) {
+          active.blur()
+          return
+        }
+        return
+      }
+      if (e.key === '?' && !typingTarget(e.target)) {
+        e.preventDefault()
+        if (screen === 'inbox') helpOpen = !helpOpen
+        return
+      }
+      if (settingsOpen || helpOpen || screen !== 'inbox') return
+      if (typingTarget(e.target)) {
+        if (e.key === '/' && e.target.classList && e.target.classList.contains('search') && e.target.value === '') {
+          return
+        }
+        return
+      }
+      if (e.key === '/') {
         e.preventDefault()
         const el = document.querySelector('.search')
         if (el) el.focus()
+        return
       }
-      if (e.key === 'o' && screen === 'inbox' && selected && document.activeElement.tagName !== 'INPUT') {
-        OpenInEditor(selected.hash)
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        moveSelection(1)
+        return
       }
-      if (e.key === 'c' && screen === 'inbox' && document.activeElement.tagName !== 'INPUT') {
+      if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        moveSelection(-1)
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        const el = document.querySelector('.detail')
+        if (el) el.focus()
+        return
+      }
+      if (e.key === 'o' && selected) {
+        OpenInEditor(selected.hash).then(() => toast('Opened in editor')).catch((err) => toast(String(err)))
+        return
+      }
+      if (e.key === 'd' && selected) {
+        doDismiss(selected.hash)
+        return
+      }
+      if (e.key === 'c') {
         doClear()
+        return
       }
-      if (e.key === 'Escape') settingsOpen = false
+      if (e.key === 's') {
+        e.preventDefault()
+        sort = sort === 'recent' ? 'frequency' : 'recent'
+        scheduleRefresh()
+      }
     }
     window.addEventListener('keydown', onKey)
     const tick = setInterval(() => {
@@ -155,18 +328,25 @@
     return () => {
       window.removeEventListener('keydown', onKey)
       clearInterval(tick)
+      clearTimeout(toastTimer)
     }
   })
 
   async function openFolder() {
     error = ''
+    scannedEmpty = false
     const dir = await PickProjectDir()
     if (!dir) return
     projectDir = dir
     busy = true
     try {
       const found = await DetectSources(dir)
-      if (found && found.length) sources = found
+      if (found && found.length) {
+        sources = found
+        scannedEmpty = false
+      } else {
+        scannedEmpty = true
+      }
     } catch (e) {
       error = String(e)
     } finally {
@@ -183,12 +363,31 @@
       projectDir = c.path.replace(/[/\\][^/\\]+$/, '')
     }
     sources = [...sources, c]
+    scannedEmpty = false
   }
 
   function addBrowser() {
     error = ''
-    if (sources.some((s) => s.type === 'browser')) return
+    if (sources.some((s) => s.type === 'browser')) {
+      toast('Browser source already added')
+      return
+    }
     sources = [...sources, { name: 'browser', type: 'browser', path: '127.0.0.1:9477' }]
+    scannedEmpty = false
+  }
+
+  function uniqueName(base) {
+    const names = new Set(sources.map((s) => s.name))
+    if (!names.has(base)) return base
+    let i = 2
+    while (names.has(base + '-' + i)) i++
+    return base + '-' + i
+  }
+
+  function addCommand() {
+    error = ''
+    sources = [...sources, { name: uniqueName('dev'), type: 'command', path: 'npm run dev' }]
+    scannedEmpty = false
   }
 
   function removeSource(i) {
@@ -204,6 +403,28 @@
     sources = sources.map((s, idx) => (idx === i ? { ...s, ...patch } : s))
   }
 
+  async function browseEditor() {
+    error = ''
+    const path = await PickEditor()
+    if (!path) return
+    customEditor = path
+    editorCommand = path
+  }
+
+  async function setFollowLatest(v) {
+    followLatest = !!v
+    if (followLatest && events.length) {
+      const latest = newestEvent(events)
+      if (latest) await selectEvent(latest)
+    }
+    if (!projectDir) return
+    try {
+      await SaveProjectConfig(cfgFromForm())
+    } catch (e) {
+      toast(String(e))
+    }
+  }
+
   async function startWatching() {
     error = ''
     busy = true
@@ -211,7 +432,9 @@
       await SaveAndWatch(projectDir, cfgFromForm(), fromStart)
       screen = 'inbox'
       settingsOpen = false
+      scannedEmpty = false
       await refresh()
+      await loadRecent()
     } catch (e) {
       error = String(e)
     } finally {
@@ -226,6 +449,7 @@
       await ApplyAndWatch(cfgFromForm(), fromStart)
       settingsOpen = false
       await refresh()
+      await loadRecent()
     } catch (e) {
       error = String(e)
     } finally {
@@ -233,37 +457,135 @@
     }
   }
 
+  async function openRecentProject(configPath) {
+    error = ''
+    busy = true
+    try {
+      await OpenRecent(configPath)
+      const b = await Bootstrap()
+      projectDir = b.projectDir || ''
+      if (b.config) applyConfig(b.config)
+      screen = 'inbox'
+      settingsOpen = false
+      await refresh()
+      await loadRecent()
+    } catch (e) {
+      error = String(e)
+      screen = 'welcome'
+    } finally {
+      busy = false
+    }
+  }
+
   async function doClear() {
+    if (!confirm('Mark inbox clean? Current errors are hidden and these log lines are skipped next time.')) return
     await Clear()
     selected = null
     await refresh()
-    statusMsg = 'Cleared — skipped on next start'
+    toast('Inbox marked clean — skipped on next start')
   }
 
   async function doClearMark() {
     await ClearMark()
     selected = null
     await refresh()
-    statusMsg = 'Mark cleared — reading from the start'
+    toast('Replaying logs from the start')
+  }
+
+  async function doDismiss(hash) {
+    if (!hash) return
+    await Dismiss([hash])
+    selected = null
+    await refresh()
+    toast('Dismissed until it happens again')
+  }
+
+  async function doDismissMatching() {
+    await DismissMatching(filter, severity, sourceFilter, '')
+    selected = null
+    await refresh()
+    toast('Dismissed matching')
+  }
+
+  async function doMute(kind, value) {
+    try {
+      await Mute(kind, value)
+      selected = null
+      await refresh()
+      await loadMutes()
+      toast(kind === 'type' ? 'Muted type' : 'Muted')
+    } catch (e) {
+      toast(String(e))
+    }
+  }
+
+  async function loadMutes() {
+    try {
+      mutes = (await Mutes()) || []
+    } catch {
+      mutes = []
+    }
+  }
+
+  async function doUnmute(kind, value) {
+    try {
+      await Unmute(kind, value)
+      await refresh()
+      await loadMutes()
+      toast('Unmuted')
+    } catch (e) {
+      toast(String(e))
+    }
   }
 
   async function doOpen(hash) {
     try {
       await OpenInEditor(hash)
-      statusMsg = 'Opened in editor'
+      toast('Opened in editor')
     } catch (e) {
-      statusMsg = String(e)
+      toast(String(e))
+    }
+  }
+
+  async function doOpenPath(file, line) {
+    try {
+      await OpenPath(file, line || 0)
+      toast('Opened in editor')
+    } catch (e) {
+      toast(String(e))
+    }
+  }
+
+  async function copyText(text, okMsg) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast(okMsg)
+    } catch {
+      toast('Could not copy')
     }
   }
 
   async function doCopy(ev) {
     const text = [ev.title, ev.location, ev.message, ev.stack].filter(Boolean).join('\n\n')
-    try {
-      await navigator.clipboard.writeText(text)
-      statusMsg = 'Copied'
-    } catch {
-      statusMsg = 'Could not copy'
+    await copyText(text, 'Copied')
+  }
+
+  async function doCopyRaw(ev) {
+    const text = (ev && ev.raw) || ''
+    if (!text) {
+      toast('No raw log')
+      return
     }
+    await copyText(text, 'Copied raw')
+  }
+
+  async function doCopyMarkdown(ev) {
+    const lines = [`**${ev.title || 'Error'}**`]
+    if (ev.location) lines.push('`' + ev.location + '`')
+    lines.push(`${ev.severity || 'error'} · ${ev.source || ''} · ×${ev.count || 1}`)
+    if (ev.message) lines.push('', ev.message)
+    if (ev.stack) lines.push('', '```', ev.stack, '```')
+    await copyText(lines.join('\n'), 'Copied markdown')
   }
 
   async function startFresh() {
@@ -274,6 +596,12 @@
     selected = null
     projectDir = ''
     sources = []
+    sourceFilter = ''
+    mutes = []
+    followLatest = false
+    extraHostsText = ''
+    scannedEmpty = false
+    await loadRecent()
   }
 </script>
 
@@ -285,70 +613,99 @@
       {sources}
       {editorCommand}
       {customEditor}
+      {recent}
+      {scannedEmpty}
       bind:notifications
       bind:sound
       bind:fromStart
+      bind:followLatest
       {error}
       {busy}
       onOpenFolder={openFolder}
       onAddFile={addFile}
       onAddBrowser={addBrowser}
+      onAddCommand={addCommand}
       onRemove={removeSource}
       onStart={startWatching}
       {onSourceChange}
+      onBrowseEditor={browseEditor}
+      onOpenRecent={openRecentProject}
     />
   {:else}
     <Inbox
       {events}
       {total}
       sources={sourceStatuses}
+      {sourceCounts}
       {selected}
       {filter}
       {severity}
+      {sourceFilter}
       {sort}
+      {followLatest}
       {statusMsg}
       marked={marked}
+      {helpOpen}
+      {ingestAddr}
+      {dismissMenus}
       onSelect={selectEvent}
       onOpen={doOpen}
+      onOpenPath={doOpenPath}
       onClear={doClear}
       onClearMark={doClearMark}
+      onDismiss={doDismiss}
+      onDismissMatching={doDismissMatching}
+      onMute={doMute}
       onCopy={doCopy}
-      onSettings={() => (settingsOpen = true)}
+      onCopyRaw={doCopyRaw}
+      onCopyMarkdown={doCopyMarkdown}
+      onSettings={async () => { await loadMutes(); await loadRecent(); settingsOpen = true }}
       onFilter={(v) => { filter = v; scheduleRefresh() }}
       onSeverity={(v) => { severity = v; scheduleRefresh() }}
+      onSourceFilter={(v) => { sourceFilter = v; scheduleRefresh() }}
       onSort={(v) => { sort = v; scheduleRefresh() }}
+      onFollowLatest={setFollowLatest}
+      onHelp={() => (helpOpen = !helpOpen)}
     />
   {/if}
 
   {#if settingsOpen}
-    <div class="modal-bg" on:click={() => (settingsOpen = false)} on:keydown={() => {}} role="presentation">
-      <div class="modal" tabindex="-1" on:click|stopPropagation on:keydown={() => {}} role="dialog">
-        <h2 style="margin-top:0">Settings</h2>
-        {#if error}
-          <div class="banner">{error}</div>
-        {/if}
-        <Welcome
+    <div
+      class="modal-bg"
+      on:click={() => (settingsOpen = false)}
+      on:keydown={(e) => e.key === 'Escape' && (settingsOpen = false)}
+      role="presentation"
+    >
+      <div class="modal" tabindex="-1" on:click|stopPropagation role="dialog" aria-labelledby="settings-title">
+        <h2 id="settings-title" style="margin-top:0">Settings</h2>
+        <Settings
           {projectDir}
           {sources}
           {editorCommand}
           {customEditor}
+          {extraHostsText}
+          {mutes}
+          {recent}
           bind:notifications
           bind:sound
           bind:fromStart
-          error=""
+          bind:followLatest
+          {error}
           {busy}
           onOpenFolder={openFolder}
           onAddFile={addFile}
           onAddBrowser={addBrowser}
+          onAddCommand={addCommand}
           onRemove={removeSource}
           onStart={saveSettings}
           {onSourceChange}
-          actionLabel="Save and restart"
+          onBrowseEditor={browseEditor}
+          onExtraHosts={(v) => (extraHostsText = v)}
+          onUnmute={doUnmute}
+          onOpenRecent={openRecentProject}
+          onNewProject={startFresh}
+          onClose={() => (settingsOpen = false)}
         />
-        <div class="row-actions">
-          <button class="btn" on:click={startFresh}>New project</button>
-          <button class="btn ghost" on:click={() => (settingsOpen = false)}>Close</button>
-        </div>
       </div>
     </div>
   {/if}

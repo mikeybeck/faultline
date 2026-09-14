@@ -10,6 +10,7 @@ import (
 	"github.com/mikey/faultline/internal/config"
 	"github.com/mikey/faultline/internal/engine"
 	"github.com/mikey/faultline/internal/mark"
+	"github.com/mikey/faultline/internal/persist"
 	"github.com/mikey/faultline/internal/tui"
 )
 
@@ -17,6 +18,10 @@ import (
 func Run(ctx context.Context, cfg *config.Config, fromStart bool) error {
 	eng := engine.New()
 	eng.UseMarks(mark.Default())
+	if db, err := persist.Default(); err == nil {
+		eng.UsePersist(db)
+		defer eng.ClosePersist()
+	}
 	if wd, err := os.Getwd(); err == nil {
 		eng.SetProjectDir(wd)
 	}
@@ -32,6 +37,7 @@ func Run(ctx context.Context, cfg *config.Config, fromStart bool) error {
 		Events:        eng.Events(),
 		StatusCh:      eng.Statuses(),
 		Clear:         eng.Clear,
+		Dismiss:       eng.Dismiss,
 		ResetMark: func() {
 			eng.ClearMarks()
 			_ = eng.Restart(ctx, cfg, fromStart)

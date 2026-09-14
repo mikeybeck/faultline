@@ -1,6 +1,8 @@
 package detect
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"os"
@@ -13,6 +15,7 @@ const (
 	TypeGeneric = "generic"
 	TypeLaravel = "laravel"
 	TypeApache  = "apache"
+	TypeJSON    = "json"
 )
 
 var (
@@ -34,6 +37,14 @@ var skipDirs = map[string]struct{}{
 	"coverage":     {},
 	".tox":         {},
 	".cache":       {},
+}
+
+// ShouldSkipDir reports directories that should not be scanned for logs or source files.
+func ShouldSkipDir(name string) bool {
+	if _, skip := skipDirs[name]; skip {
+		return true
+	}
+	return strings.HasPrefix(name, ".")
 }
 
 const (
@@ -66,6 +77,9 @@ func Sniff(path string) string {
 
 // SniffBytes guesses a parser type from a sample.
 func SniffBytes(data []byte) string {
+	if looksLikeJSONLog(data) {
+		return TypeJSON
+	}
 	if laravelSniffRe.Match(data) {
 		return TypeLaravel
 	}
@@ -73,6 +87,47 @@ func SniffBytes(data []byte) string {
 		return TypeApache
 	}
 	return TypeGeneric
+}
+
+func looksLikeJSONLog(data []byte) bool {
+	n := 0
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		if line[0] != '{' {
+			return false
+		}
+		var m map[string]any
+		if err := json.Unmarshal(line, &m); err != nil {
+			return false
+		}
+		if !jsonLogKeys(m) {
+			return false
+		}
+		n++
+		if n >= 2 {
+			return true
+		}
+	}
+	return n == 1
+}
+
+func jsonLogKeys(m map[string]any) bool {
+	if _, ok := m["level"]; ok {
+		return true
+	}
+	if _, ok := m["severity"]; ok {
+		return true
+	}
+	if _, ok := m["msg"]; ok {
+		return true
+	}
+	if _, ok := m["message"]; ok {
+		return true
+	}
+	return false
 }
 
 // ScanDir finds likely log files under root and sniffs each format.
@@ -94,13 +149,8 @@ func ScanDir(root string) ([]Candidate, error) {
 			depth = 1 + strings.Count(rel, string(os.PathSeparator))
 		}
 		if d.IsDir() {
-			if path != root {
-				if _, skip := skipDirs[d.Name()]; skip {
-					return filepath.SkipDir
-				}
-				if strings.HasPrefix(d.Name(), ".") {
-					return filepath.SkipDir
-				}
+			if path != root && ShouldSkipDir(d.Name()) {
+				return filepath.SkipDir
 			}
 			if depth > maxDepth {
 				return filepath.SkipDir
