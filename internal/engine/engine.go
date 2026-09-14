@@ -3,11 +3,13 @@ package engine
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/mikey/faultline/internal/applog"
 	"github.com/mikey/faultline/internal/config"
 	"github.com/mikey/faultline/internal/editor"
 	"github.com/mikey/faultline/internal/event"
@@ -695,4 +697,60 @@ func (e *Engine) pingInbox() {
 	case e.eventCh <- ev:
 	default:
 	}
+}
+
+// ReportInternal records a Faultline-own error to the log file and the inbox.
+func (e *Engine) ReportInternal(message, stack string) {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return
+	}
+	_ = applog.Write(message, stack)
+	now := time.Now()
+	logPath, _ := applog.Path()
+	ev := event.Event{
+		Source:    applog.Source,
+		Time:      now,
+		Type:      "Faultline",
+		Message:   message,
+		File:      logPath,
+		Severity:  event.SeverityError,
+		Stack:     strings.TrimSpace(stack),
+		Raw:       strings.TrimSpace(message + "\n" + stack),
+		Count:     1,
+		FirstSeen: now,
+		LastSeen:  now,
+	}
+	ev.Hash = event.Fingerprint(ev.Source, ev.Type, ev.Message, filepath.Base(ev.File), 0)
+
+	db, project := e.persistState()
+	if project == "" {
+		project = applog.Source
+	}
+	if db != nil {
+		res, err := db.Record(project, ev, false)
+		if err == nil {
+			if res.Show {
+				e.store.Put(res.Event)
+			}
+		} else {
+			e.store.Ingest(ev)
+		}
+	} else {
+		e.store.Ingest(ev)
+	}
+	st := source.Status{
+		Name:    applog.Source,
+		Type:    "generic",
+		Path:    logPath,
+		State:   source.StateError,
+		Message: message,
+		Updated: now,
+	}
+	e.noteStatus(st)
+	select {
+	case e.statusCh <- st:
+	default:
+	}
+	e.pingInbox()
 }

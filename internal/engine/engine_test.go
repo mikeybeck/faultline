@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mikey/faultline/internal/applog"
 	"github.com/mikey/faultline/internal/config"
 	"github.com/mikey/faultline/internal/ingest"
 	"github.com/mikey/faultline/internal/mark"
@@ -21,6 +22,38 @@ func testEngine() *Engine {
 	e := New()
 	e.SetIngestAddr(ingest.Disabled)
 	return e
+}
+
+func TestReportInternalShowsInInbox(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("APPDATA", dir)
+	t.Setenv("LOCALAPPDATA", dir)
+
+	eng := testEngine()
+	eng.ReportInternal("settings hung", "goroutine 1\n")
+	items := eng.Store().List("")
+	if len(items) != 1 {
+		t.Fatalf("len = %d", len(items))
+	}
+	if items[0].Source != applog.Source || items[0].Type != "Faultline" {
+		t.Fatalf("event = %+v", items[0])
+	}
+	if items[0].Message != "settings hung" {
+		t.Fatalf("message = %q", items[0].Message)
+	}
+	p, err := applog.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "settings hung") {
+		t.Fatalf("log = %q", data)
+	}
 }
 
 func TestEngineIngestsGenericLog(t *testing.T) {

@@ -26,7 +26,9 @@
   export let onUnmute = () => {}
   export let onOpenRecent = () => {}
   export let onNewProject = () => {}
+  export let onOpenLog = () => {}
   export let onClose = () => {}
+  export let logPath = ''
 
   function projectName(p) {
     if (!p) return ''
@@ -96,6 +98,15 @@
       </div>
     </div>
   {/if}
+
+  <div class="field">
+    <span class="lbl">Faultline log</span>
+    <div class="path" title={logPath}>{logPath || 'Written next to app config as faultline.log'}</div>
+    <p class="hint">App errors also show in the inbox as source “faultline”.</p>
+  </div>
+  <div class="row-actions">
+    <button type="button" class="btn" on:click={onOpenLog}>Open Faultline log</button>
+  </div>
 
   <div class="row-actions">
     <button class="btn primary" disabled={busy || sources.length === 0 || !projectDir} on:click={onStart}>

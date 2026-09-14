@@ -40,6 +40,7 @@ button { cursor: pointer; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .app {
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -423,21 +424,30 @@ code { font-family: var(--mono); font-size: 0.92em; }
 
 .modal-bg {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background: rgba(0,0,0,0.55);
-  display: grid;
-  place-items: center;
-  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  pointer-events: auto;
 }
 .modal {
-  width: min(680px, calc(100% - 32px));
-  max-height: calc(100% - 48px);
+  position: relative;
+  z-index: 10001;
+  width: 680px;
+  max-width: calc(100% - 32px);
+  max-height: 90%;
   overflow: auto;
   background: var(--bg-elev);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 22px;
   box-shadow: var(--shadow);
+  pointer-events: auto;
 }
 
 @media (max-width: 840px) {

@@ -19,12 +19,15 @@
     Mutes,
     NewProject,
     OpenInEditor,
+    OpenFaultlineLog,
     OpenPath,
     OpenRecent,
     PickEditor,
     PickLogFile,
     PickProjectDir,
     RecentProjects,
+    ReportError,
+    FaultlineLogPath,
     SaveAndWatch,
     SaveProjectConfig,
     Unmute,
@@ -62,6 +65,7 @@
   let total = 0
   let marked = false
   let mutes = []
+  let logPath = ''
   let refreshTimer
   let refreshBusy = false
   let refreshQueued = false
@@ -73,6 +77,31 @@
     toastTimer = setTimeout(() => {
       if (statusMsg === msg) statusMsg = ''
     }, 2800)
+  }
+
+  function reportClientError(context, err) {
+    const detail = err && err.message ? err.message : String(err || 'unknown error')
+    const msg = context ? context + ': ' + detail : detail
+    toast(msg)
+    const stack = (err && err.stack) || ''
+    ReportError(msg, stack).catch(() => {})
+  }
+
+  function openSettings() {
+    settingsOpen = true
+    Promise.all([
+      loadMutes(),
+      loadRecent(),
+      FaultlineLogPath().then((p) => { logPath = p || '' }),
+    ]).catch((e) => reportClientError('Settings failed to load', e))
+  }
+
+  async function openFaultlineLog() {
+    try {
+      await OpenFaultlineLog()
+    } catch (e) {
+      reportClientError('Could not open Faultline log', e)
+    }
   }
 
   function hostsFromText(text) {
@@ -114,43 +143,47 @@
   }
 
   async function refresh() {
-    const st = await GetState(filter, sort, severity, sourceFilter)
-    events = st.events || []
-    total = st.total || events.length
-    marked = !!st.marked
-    sourceStatuses = st.sources || []
-    sourceCounts = st.sourceCounts || {}
-    ingestAddr = st.ingestAddr || ''
-    if (followLatest && events.length) {
-      const latest = newestEvent(events)
-      if (latest && (!selected || selected.hash !== latest.hash)) {
-        await selectEvent(latest)
-      } else if (latest && selected) {
-        selected = {
-          ...selected,
-          ...latest,
-          stack: selected.stack,
-          raw: selected.raw,
-          message: selected.message || latest.message,
-          frames: selected.frames,
+    try {
+      const st = await GetState(filter, sort, severity, sourceFilter)
+      events = st.events || []
+      total = st.total || events.length
+      marked = !!st.marked
+      sourceStatuses = st.sources || []
+      sourceCounts = st.sourceCounts || {}
+      ingestAddr = st.ingestAddr || ''
+      if (followLatest && events.length) {
+        const latest = newestEvent(events)
+        if (latest && (!selected || selected.hash !== latest.hash)) {
+          await selectEvent(latest)
+        } else if (latest && selected) {
+          selected = {
+            ...selected,
+            ...latest,
+            stack: selected.stack,
+            raw: selected.raw,
+            message: selected.message || latest.message,
+            frames: selected.frames,
+          }
         }
-      }
-    } else if (selected) {
-      const next = events.find((e) => e.hash === selected.hash)
-      if (next) {
-        selected = {
-          ...selected,
-          ...next,
-          stack: selected.stack,
-          raw: selected.raw,
-          message: selected.message || next.message,
-          frames: selected.frames,
+      } else if (selected) {
+        const next = events.find((e) => e.hash === selected.hash)
+        if (next) {
+          selected = {
+            ...selected,
+            ...next,
+            stack: selected.stack,
+            raw: selected.raw,
+            message: selected.message || next.message,
+            frames: selected.frames,
+          }
+        } else {
+          selected = null
         }
-      } else {
-        selected = null
+      } else if (events.length) {
+        await selectEvent(events[0])
       }
-    } else if (events.length) {
-      await selectEvent(events[0])
+    } catch (e) {
+      reportClientError('Refresh failed', e)
     }
   }
 
@@ -208,18 +241,22 @@
   }
 
   async function load() {
-    const b = await Bootstrap()
-    projectDir = b.projectDir || ''
-    fromStart = b.fromStart !== false
-    recent = b.recent || []
-    ingestAddr = b.ingestAddr || ''
-    if (b.config) applyConfig(b.config)
-    else {
-      const d = await DefaultConfig()
-      applyConfig(d)
+    try {
+      const b = await Bootstrap()
+      projectDir = b.projectDir || ''
+      fromStart = b.fromStart !== false
+      recent = b.recent || []
+      ingestAddr = b.ingestAddr || ''
+      if (b.config) applyConfig(b.config)
+      else {
+        const d = await DefaultConfig()
+        applyConfig(d)
+      }
+      screen = b.screen || 'welcome'
+      if (screen === 'inbox') await refresh()
+    } catch (e) {
+      reportClientError('Startup failed', e)
     }
-    screen = b.screen || 'welcome'
-    if (screen === 'inbox') await refresh()
   }
 
   function typingTarget(el) {
@@ -243,6 +280,15 @@
     load()
     EventsOn('inbox:changed', scheduleRefresh)
     EventsOn('status', scheduleRefresh)
+    const onWindowError = (e) => {
+      ReportError(e.message || 'window error', (e.error && e.error.stack) || '').catch(() => {})
+    }
+    const onRejection = (e) => {
+      const r = e.reason
+      ReportError(String(r || 'unhandled rejection'), (r && r.stack) || '').catch(() => {})
+    }
+    window.addEventListener('error', onWindowError)
+    window.addEventListener('unhandledrejection', onRejection)
     const onKey = (e) => {
       if (e.key === 'Escape') {
         if (helpOpen) {
@@ -327,6 +373,8 @@
     }, 2000)
     return () => {
       window.removeEventListener('keydown', onKey)
+      window.removeEventListener('error', onWindowError)
+      window.removeEventListener('unhandledrejection', onRejection)
       clearInterval(tick)
       clearTimeout(toastTimer)
     }
@@ -437,6 +485,7 @@
       await loadRecent()
     } catch (e) {
       error = String(e)
+      reportClientError('Could not start watching', e)
     } finally {
       busy = false
     }
@@ -452,6 +501,7 @@
       await loadRecent()
     } catch (e) {
       error = String(e)
+      reportClientError('Could not save settings', e)
     } finally {
       busy = false
     }
@@ -659,7 +709,7 @@
       onCopy={doCopy}
       onCopyRaw={doCopyRaw}
       onCopyMarkdown={doCopyMarkdown}
-      onSettings={async () => { await loadMutes(); await loadRecent(); settingsOpen = true }}
+      onSettings={openSettings}
       onFilter={(v) => { filter = v; scheduleRefresh() }}
       onSeverity={(v) => { severity = v; scheduleRefresh() }}
       onSourceFilter={(v) => { sourceFilter = v; scheduleRefresh() }}
@@ -672,11 +722,11 @@
   {#if settingsOpen}
     <div
       class="modal-bg"
-      on:click={() => (settingsOpen = false)}
+      on:mousedown|self={() => (settingsOpen = false)}
       on:keydown={(e) => e.key === 'Escape' && (settingsOpen = false)}
       role="presentation"
     >
-      <div class="modal" tabindex="-1" on:click|stopPropagation role="dialog" aria-labelledby="settings-title">
+      <div class="modal" tabindex="-1" on:mousedown|stopPropagation role="dialog" aria-labelledby="settings-title">
         <h2 id="settings-title" style="margin-top:0">Settings</h2>
         <Settings
           {projectDir}
@@ -686,6 +736,7 @@
           {extraHostsText}
           {mutes}
           {recent}
+          {logPath}
           bind:notifications
           bind:sound
           bind:fromStart
@@ -704,6 +755,7 @@
           onUnmute={doUnmute}
           onOpenRecent={openRecentProject}
           onNewProject={startFresh}
+          onOpenLog={openFaultlineLog}
           onClose={() => (settingsOpen = false)}
         />
       </div>

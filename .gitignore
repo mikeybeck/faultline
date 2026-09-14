@@ -14,3 +14,4 @@ build/windows
 build/release
 /deploy.sh
 /deploy.local.sh
+/ship.sh

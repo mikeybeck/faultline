@@ -26,6 +26,8 @@ export function Dismiss(arg1:Array<string>):Promise<void>;
 
 export function DismissMatching(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function FaultlineLogPath():Promise<string>;
+
 export function GetEvent(arg1:string):Promise<main.EventDTO>;
 
 export function GetState(arg1:string,arg2:string,arg3:string,arg4:string):Promise<main.AppState>;
@@ -35,6 +37,8 @@ export function Mute(arg1:string,arg2:string):Promise<void>;
 export function Mutes():Promise<Array<persist.Mute>>;
 
 export function NewProject():Promise<void>;
+
+export function OpenFaultlineLog():Promise<void>;
 
 export function OpenInEditor(arg1:string):Promise<void>;
 
@@ -49,6 +53,8 @@ export function PickLogFile():Promise<string>;
 export function PickProjectDir():Promise<string>;
 
 export function RecentProjects():Promise<Array<statefile.Project>>;
+
+export function ReportError(arg1:string,arg2:string):Promise<void>;
 
 export function SaveAndWatch(arg1:string,arg2:config.Config,arg3:boolean):Promise<void>;
 

@@ -42,6 +42,10 @@ export function DismissMatching(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['DismissMatching'](arg1, arg2, arg3, arg4);
 }
 
+export function FaultlineLogPath() {
+  return window['go']['main']['App']['FaultlineLogPath']();
+}
+
 export function GetEvent(arg1) {
   return window['go']['main']['App']['GetEvent'](arg1);
 }
@@ -60,6 +64,10 @@ export function Mutes() {
 
 export function NewProject() {
   return window['go']['main']['App']['NewProject']();
+}
+
+export function OpenFaultlineLog() {
+  return window['go']['main']['App']['OpenFaultlineLog']();
 }
 
 export function OpenInEditor(arg1) {
@@ -88,6 +96,10 @@ export function PickProjectDir() {
 
 export function RecentProjects() {
   return window['go']['main']['App']['RecentProjects']();
+}
+
+export function ReportError(arg1, arg2) {
+  return window['go']['main']['App']['ReportError'](arg1, arg2);
 }
 
 export function SaveAndWatch(arg1, arg2, arg3) {

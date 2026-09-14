@@ -162,8 +162,8 @@
       <div class="pill">No sources</div>
     {/if}
   </div>
-  <button class="btn ghost" title="Keyboard shortcuts" on:click={onHelp}>?</button>
-  <button class="btn" on:click={onSettings}>Settings</button>
+  <button type="button" class="btn ghost" title="Keyboard shortcuts" on:click={onHelp}>?</button>
+  <button type="button" class="btn" on:click|stopPropagation={onSettings}>Settings</button>
 </div>
 
 <div class="toolbar">
@@ -301,8 +301,8 @@
 </div>
 
 {#if helpOpen}
-  <div class="modal-bg" on:click={onHelp} on:keydown={(e) => e.key === 'Escape' && onHelp()} role="presentation">
-    <div class="modal help-modal" role="dialog" aria-labelledby="help-title" tabindex="-1" on:click|stopPropagation>
+  <div class="modal-bg" on:mousedown|self={onHelp} on:keydown={(e) => e.key === 'Escape' && onHelp()} role="presentation">
+    <div class="modal help-modal" role="dialog" aria-labelledby="help-title" tabindex="-1" on:mousedown|stopPropagation>
       <h2 id="help-title">Shortcuts</h2>
       <table class="keys">
         <tbody>

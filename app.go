@@ -10,6 +10,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/mikey/faultline/internal/applog"
 	"github.com/mikey/faultline/internal/config"
 	"github.com/mikey/faultline/internal/detect"
 	"github.com/mikey/faultline/internal/editor"
@@ -38,6 +39,8 @@ func NewApp(configPath string, fromStart bool) *App {
 	eng.UseMarks(mark.Default())
 	if db, err := persist.Default(); err == nil {
 		eng.UsePersist(db)
+	} else {
+		eng.ReportInternal("inbox database: "+err.Error(), "")
 	}
 	return &App{
 		eng:           eng,
@@ -55,6 +58,7 @@ func (a *App) startup(ctx context.Context) {
 		cfg, err := config.Load(a.flagConfig)
 		if err != nil {
 			runtime.LogError(ctx, err.Error())
+			a.eng.ReportInternal("failed to load "+a.flagConfig+": "+err.Error(), "")
 			return
 		}
 		a.configPath = a.flagConfig
@@ -62,6 +66,7 @@ func (a *App) startup(ctx context.Context) {
 		a.eng.SetProjectDir(a.projectDir)
 		if err := a.eng.Start(ctx, cfg, a.fromStart); err != nil {
 			runtime.LogError(ctx, err.Error())
+			a.eng.ReportInternal("failed to start watchers: "+err.Error(), "")
 		}
 		_ = statefile.Remember(a.projectDir, a.configPath)
 		return
@@ -76,6 +81,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	cfg, err := config.Load(st.ConfigPath)
 	if err != nil {
+		a.eng.ReportInternal("failed to load "+st.ConfigPath+": "+err.Error(), "")
 		return
 	}
 	a.projectDir = st.ProjectDir
@@ -83,6 +89,7 @@ func (a *App) startup(ctx context.Context) {
 	a.eng.SetProjectDir(a.projectDir)
 	if err := a.eng.Start(ctx, cfg, a.fromStart); err != nil {
 		runtime.LogError(ctx, err.Error())
+		a.eng.ReportInternal("failed to start watchers: "+err.Error(), "")
 	}
 	_ = statefile.Remember(a.projectDir, a.configPath)
 }
@@ -289,6 +296,7 @@ func (a *App) OpenRecent(configPath string) error {
 	a.configPath = configPath
 	a.eng.SetProjectDir(dir)
 	if err := a.eng.Restart(a.ctx, cfg, a.fromStart); err != nil {
+		a.eng.ReportInternal("failed to open project: "+err.Error(), "")
 		return err
 	}
 	return statefile.Remember(dir, configPath)
@@ -382,6 +390,7 @@ func (a *App) SaveAndWatch(projectDir string, cfg config.Config, fromStart bool)
 	a.fromStart = fromStart
 	a.eng.SetProjectDir(projectDir)
 	if err := a.eng.Restart(a.ctx, &cfg, fromStart); err != nil {
+		a.eng.ReportInternal("failed to start watchers: "+err.Error(), "")
 		return err
 	}
 	return statefile.Remember(projectDir, path)
@@ -415,6 +424,35 @@ func (a *App) NewProject() {
 	a.eng.ResetInbox()
 	a.projectDir = ""
 	a.configPath = ""
+}
+
+// ReportError records a Faultline UI or backend error in the log file and inbox.
+func (a *App) ReportError(message, stack string) {
+	a.eng.ReportInternal(message, stack)
+}
+
+func (a *App) FaultlineLogPath() string {
+	p, err := applog.Path()
+	if err != nil {
+		return ""
+	}
+	return p
+}
+
+func (a *App) OpenFaultlineLog() error {
+	p, err := applog.Path()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	_ = f.Close()
+	return a.eng.Open(p, 1)
 }
 
 // EventDTO is the JSON shape sent to the frontend.
