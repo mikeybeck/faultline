@@ -183,4 +183,77 @@
   )
 
   hookConsole('error', 'error')
+  hookConsole('warn', 'warning')
+
+  const origFetch = window.fetch
+  if (typeof origFetch === 'function') {
+    window.fetch = function (...args) {
+      return origFetch.apply(this, args).then((res) => {
+        try {
+          const url = String((res && res.url) || '')
+          if (
+            res &&
+            !res.ok &&
+            res.status !== 404 &&
+            !url.includes('127.0.0.1:9477') &&
+            !url.includes('localhost:9477')
+          ) {
+            send({
+              type: 'FailedFetch',
+              message: (res.status || 0) + ' ' + (res.statusText || '') + ' ' + url,
+              file: location.href,
+              line: 0,
+              column: 0,
+              stack: '',
+              url: location.href,
+              severity: res.status >= 500 ? 'error' : 'warning',
+            })
+          }
+        } catch (_) {}
+        return res
+      })
+    }
+  }
+
+  function viteMessage(el) {
+    if (!el) return ''
+    try {
+      if (el.shadowRoot && el.shadowRoot.textContent) return el.shadowRoot.textContent.trim()
+    } catch (_) {}
+    return (el.textContent || '').trim()
+  }
+
+  function sendVite(el) {
+    const msg = viteMessage(el).slice(0, 4000)
+    if (!msg) return
+    send({
+      type: 'ViteError',
+      message: msg,
+      file: '',
+      line: 0,
+      column: 0,
+      stack: msg,
+      url: location.href,
+      severity: 'error',
+    })
+  }
+
+  function hookViteOverlay() {
+    const seen = new WeakSet()
+    const scan = () => {
+      document.querySelectorAll('vite-error-overlay').forEach((el) => {
+        if (seen.has(el)) return
+        seen.add(el)
+        sendVite(el)
+      })
+    }
+    scan()
+    const obs = new MutationObserver(scan)
+    obs.observe(document.documentElement, { childList: true, subtree: true })
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hookViteOverlay)
+  } else {
+    hookViteOverlay()
+  }
 })()

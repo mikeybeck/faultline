@@ -23,6 +23,7 @@
   export let onDismiss
   export let onDismissMatching
   export let onMute
+  export let onSnooze = () => {}
   export let onCopy
   export let onCopyRaw = () => {}
   export let onCopyMarkdown = () => {}
@@ -249,6 +250,8 @@
         <button class="btn" on:click={() => onCopyMarkdown(selected)}>Copy markdown</button>
         <button class="btn" disabled={!selected.raw} on:click={() => onCopyRaw(selected)}>Copy raw</button>
         <button class="btn" title="Hide until this error happens again" on:click={() => onDismiss(selected.hash)}>Dismiss</button>
+        <button class="btn" title="Hide for 15 minutes even if it repeats" on:click={() => onSnooze(selected.hash, 15)}>Snooze 15m</button>
+        <button class="btn" title="Hide for an hour even if it repeats" on:click={() => onSnooze(selected.hash, 60)}>Snooze 1h</button>
         <div class="menu">
           <button class="btn" on:click={() => (muteOpen = !muteOpen)}>Mute</button>
           {#if muteOpen}
@@ -311,6 +314,7 @@
           <tr><td><kbd>Enter</kbd></td><td>Focus detail</td></tr>
           <tr><td><kbd>o</kbd></td><td>Open in editor</td></tr>
           <tr><td><kbd>d</kbd></td><td>Dismiss until it happens again</td></tr>
+          <tr><td><kbd>z</kbd></td><td>Snooze 15 minutes</td></tr>
           <tr><td><kbd>c</kbd></td><td>Mark inbox clean</td></tr>
           <tr><td><kbd>s</kbd></td><td>Toggle sort</td></tr>
           <tr><td><kbd>?</kbd></td><td>This help</td></tr>

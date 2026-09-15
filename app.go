@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/mikey/faultline/internal/editor"
 	"github.com/mikey/faultline/internal/engine"
 	"github.com/mikey/faultline/internal/event"
+	"github.com/mikey/faultline/internal/extdist"
 	"github.com/mikey/faultline/internal/ingest"
 	"github.com/mikey/faultline/internal/mark"
 	"github.com/mikey/faultline/internal/persist"
@@ -32,6 +34,7 @@ type App struct {
 	projectDir    string
 	configPath    string
 	fromStart     bool
+	extDir        string
 }
 
 func NewApp(configPath string, fromStart bool) *App {
@@ -52,6 +55,14 @@ func NewApp(configPath string, fromStart bool) *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.eng.SetNotifyActivate(func(ev event.Event) {
+		runtime.WindowUnminimise(ctx)
+		runtime.WindowShow(ctx)
+		runtime.EventsEmit(ctx, "inbox:focus", ev.Hash)
+		if ev.File != "" {
+			_ = a.eng.Open(ev.File, ev.Line)
+		}
+	})
 	go a.relay()
 
 	if a.flagConfig != "" {
@@ -129,6 +140,8 @@ type Bootstrap struct {
 	Recent     []statefile.Project `json:"recent"`
 	Editors    []string            `json:"editors"`
 	IngestAddr string              `json:"ingestAddr"`
+	ExtDir     string              `json:"extDir"`
+	ExtZipURL  string              `json:"extZipURL"`
 }
 
 func (a *App) Bootstrap() Bootstrap {
@@ -147,6 +160,8 @@ func (a *App) Bootstrap() Bootstrap {
 		Recent:     statefile.RecentProjects(),
 		Editors:    editor.Installed(),
 		IngestAddr: a.eng.BoundIngest(),
+		ExtDir:     a.extDir,
+		ExtZipURL:  extdist.JoinURL(a.eng.BoundIngest()),
 	}
 }
 
@@ -453,6 +468,35 @@ func (a *App) OpenFaultlineLog() error {
 	}
 	_ = f.Close()
 	return a.eng.Open(p, 1)
+}
+
+func (a *App) InstallExtension(src fs.FS) {
+	dir, err := extdist.Install(src)
+	if err != nil {
+		a.eng.ReportInternal("extension bundle: "+err.Error(), "")
+		return
+	}
+	a.extDir = extdist.PreferLocal(dir)
+	a.eng.SetExtensionDir(a.extDir)
+}
+
+func (a *App) ExtensionDir() string {
+	return a.extDir
+}
+
+func (a *App) RevealExtension() error {
+	if a.extDir == "" {
+		return fmt.Errorf("extension folder is not installed")
+	}
+	manifest := filepath.Join(a.extDir, "manifest.json")
+	return a.eng.Open(manifest, 1)
+}
+
+func (a *App) Snooze(hash string, minutes int) {
+	if minutes <= 0 {
+		minutes = 15
+	}
+	a.eng.Snooze([]string{hash}, time.Duration(minutes)*time.Minute)
 }
 
 // EventDTO is the JSON shape sent to the frontend.

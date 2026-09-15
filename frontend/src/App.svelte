@@ -28,7 +28,9 @@
     RecentProjects,
     ReportError,
     FaultlineLogPath,
+    RevealExtension,
     SaveAndWatch,
+    Snooze,
     SaveProjectConfig,
     Unmute,
   } from '../wailsjs/go/main/App.js'
@@ -43,6 +45,7 @@
   let sound = false
   let fromStart = true
   let followLatest = false
+  let clearOnCommit = false
   let extraHostsText = ''
   let error = ''
   let busy = false
@@ -56,6 +59,8 @@
   let sourceStatuses = []
   let sourceCounts = {}
   let ingestAddr = ''
+  let extDir = ''
+  let extZipURL = ''
   let filter = ''
   let severity = 'all'
   let sourceFilter = ''
@@ -113,10 +118,10 @@
 
   function cfgFromForm() {
     return {
-      sources: sources.map((s) => ({ name: s.name, type: s.type, path: s.path })),
+      sources: sources.map((s) => ({ name: s.name, type: s.type, path: s.path, parser: s.parser || '' })),
       notifications: { enabled: notifications, sound },
       editor: { command: editorCommand },
-      inbox: { followLatest },
+      inbox: { followLatest, clearOnCommit },
       browser: { extraHosts: hostsFromText(extraHostsText) },
     }
   }
@@ -128,6 +133,7 @@
     sound = !!(cfg.notifications && cfg.notifications.sound)
     editorCommand = (cfg.editor && cfg.editor.command) || 'code'
     followLatest = !!(cfg.inbox && cfg.inbox.followLatest)
+    clearOnCommit = !!(cfg.inbox && cfg.inbox.clearOnCommit)
     extraHostsText = ((cfg.browser && cfg.browser.extraHosts) || []).join('\n')
     if (!['code', 'cursor', 'phpstorm'].includes(editorCommand)) {
       customEditor = editorCommand
@@ -247,6 +253,8 @@
       fromStart = b.fromStart !== false
       recent = b.recent || []
       ingestAddr = b.ingestAddr || ''
+      extDir = b.extDir || ''
+      extZipURL = b.extZipURL || ''
       if (b.config) applyConfig(b.config)
       else {
         const d = await DefaultConfig()
@@ -280,6 +288,16 @@
     load()
     EventsOn('inbox:changed', scheduleRefresh)
     EventsOn('status', scheduleRefresh)
+    EventsOn('inbox:focus', async (hash) => {
+      if (!hash) return
+      try {
+        const ev = await GetEvent(hash)
+        selected = ev
+        await refresh()
+      } catch (e) {
+        reportClientError('Could not open notified error', e)
+      }
+    })
     const onWindowError = (e) => {
       ReportError(e.message || 'window error', (e.error && e.error.stack) || '').catch(() => {})
     }
@@ -355,6 +373,10 @@
       }
       if (e.key === 'd' && selected) {
         doDismiss(selected.hash)
+        return
+      }
+      if (e.key === 'z' && selected) {
+        doSnooze(selected.hash, 15)
         return
       }
       if (e.key === 'c') {
@@ -557,7 +579,38 @@
     toast('Dismissed matching')
   }
 
-  async function doMute(kind, value) {
+  async function doSnooze(hash, minutes) {
+    try {
+      await Snooze(hash, minutes)
+      selected = null
+      await refresh()
+      toast('Snoozed ' + minutes + 'm')
+    } catch (e) {
+      reportClientError('Snooze failed', e)
+    }
+  }
+
+  async function revealExtension() {
+    try {
+      await RevealExtension()
+      toast('Opened extension folder')
+    } catch (e) {
+      reportClientError('Could not open extension folder', e)
+    }
+  }
+
+  async function copyExtensionPath() {
+    if (!extDir) {
+      toast('Extension path not ready')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(extDir)
+      toast('Copied extension path')
+    } catch (e) {
+      toast(extDir)
+    }
+  }
     try {
       await Mute(kind, value)
       selected = null
@@ -669,6 +722,7 @@
       bind:sound
       bind:fromStart
       bind:followLatest
+      bind:clearOnCommit
       {error}
       {busy}
       onOpenFolder={openFolder}
@@ -680,6 +734,10 @@
       {onSourceChange}
       onBrowseEditor={browseEditor}
       onOpenRecent={openRecentProject}
+      {extDir}
+      {extZipURL}
+      onRevealExtension={revealExtension}
+      onCopyExtensionPath={copyExtensionPath}
     />
   {:else}
     <Inbox
@@ -706,6 +764,7 @@
       onDismiss={doDismiss}
       onDismissMatching={doDismissMatching}
       onMute={doMute}
+      onSnooze={doSnooze}
       onCopy={doCopy}
       onCopyRaw={doCopyRaw}
       onCopyMarkdown={doCopyMarkdown}
@@ -741,6 +800,9 @@
           bind:sound
           bind:fromStart
           bind:followLatest
+          bind:clearOnCommit
+          {extDir}
+          {extZipURL}
           {error}
           {busy}
           onOpenFolder={openFolder}
@@ -756,6 +818,8 @@
           onOpenRecent={openRecentProject}
           onNewProject={startFresh}
           onOpenLog={openFaultlineLog}
+          onRevealExtension={revealExtension}
+          onCopyExtensionPath={copyExtensionPath}
           onClose={() => (settingsOpen = false)}
         />
       </div>

@@ -58,6 +58,15 @@ func TestValidateRejectsBadType(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsCommandParser(t *testing.T) {
+	if err := (&Config{Sources: []SourceConfig{{Type: "command", Path: "npm run dev", Parser: "json"}}}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&Config{Sources: []SourceConfig{{Type: "command", Path: "npm run dev", Parser: "nope"}}}).Validate(); err == nil {
+		t.Fatal("expected parser validation error")
+	}
+}
+
 func TestValidateAcceptsCommandAndJSON(t *testing.T) {
 	if err := (&Config{Sources: []SourceConfig{{Type: "command", Path: "npm run dev"}}}).Validate(); err != nil {
 		t.Fatal(err)

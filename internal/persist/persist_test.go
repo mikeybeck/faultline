@@ -226,3 +226,28 @@ func TestEmptyPathIsNoop(t *testing.T) {
 		t.Fatalf("noop load: %+v %v", got, err)
 	}
 }
+
+func TestSnoozeHidesUntil(t *testing.T) {
+	db := testDB(t)
+	t0 := time.Now().Truncate(time.Millisecond)
+	ev := sample("/p", "snooze me", t0)
+	if _, err := db.Record("/p", ev, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Snooze("/p", []string{ev.Hash}, t0.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	active, err := db.LoadActive("/p")
+	if err != nil || len(active) != 0 {
+		t.Fatalf("snoozed still active: %+v err=%v", active, err)
+	}
+	again := ev
+	again.Time = t0.Add(time.Minute)
+	res, err := db.Record("/p", again, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Show {
+		t.Fatal("occurrence during snooze should stay hidden")
+	}
+}

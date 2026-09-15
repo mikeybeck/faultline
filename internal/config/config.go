@@ -19,9 +19,10 @@ type Config struct {
 
 // SourceConfig describes a single log source.
 type SourceConfig struct {
-	Name string `yaml:"name" json:"name"`
-	Type string `yaml:"type" json:"type"` // generic | laravel | apache | json | browser | command
-	Path string `yaml:"path" json:"path"` // file path, ingest addr, or shell command
+	Name   string `yaml:"name" json:"name"`
+	Type   string `yaml:"type" json:"type"`               // generic | laravel | apache | json | browser | command
+	Path   string `yaml:"path" json:"path"`               // file path, ingest addr, or shell command
+	Parser string `yaml:"parser,omitempty" json:"parser"` // for command sources: generic | json | laravel | apache
 }
 
 // BrowserConfig is project-wide browser ingest extras.
@@ -37,8 +38,8 @@ type NotifyConfig struct {
 
 // InboxConfig controls desktop inbox behavior.
 type InboxConfig struct {
-	// FollowLatest always selects the newest error as it arrives.
-	FollowLatest bool `yaml:"followLatest" json:"followLatest"`
+	FollowLatest  bool `yaml:"followLatest" json:"followLatest"`
+	ClearOnCommit bool `yaml:"clearOnCommit" json:"clearOnCommit"`
 }
 
 // EditorConfig controls opening files at a location.
@@ -124,6 +125,13 @@ func (c *Config) Validate() error {
 		}
 		if s.Path == "" {
 			return fmt.Errorf("config: sources[%d].path is required", i)
+		}
+		if s.Type == "command" && s.Parser != "" {
+			switch s.Parser {
+			case "generic", "laravel", "apache", "json":
+			default:
+				return fmt.Errorf("config: sources[%d].parser must be generic, laravel, apache, or json, got %q", i, s.Parser)
+			}
 		}
 	}
 	return nil

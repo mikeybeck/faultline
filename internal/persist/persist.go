@@ -113,12 +113,14 @@ CREATE TABLE IF NOT EXISTS mutes (
 	if err != nil {
 		return fmt.Errorf("inbox db migrate: %w", err)
 	}
+	_, _ = d.sql.Exec(`ALTER TABLE events ADD COLUMN snoozed_until INTEGER`)
 	return nil
 }
 
 type row struct {
-	ev          event.Event
-	dismissedAt sql.NullInt64
+	ev           event.Event
+	dismissedAt  sql.NullInt64
+	snoozedUntil sql.NullInt64
 }
 
 // Record upserts an occurrence. replay skips count bumps for hashes already stored
@@ -213,7 +215,8 @@ func (d *DB) Record(project string, ev event.Event, replay bool) (RecordResult, 
 	if err := d.updateLocked(project, merged, dismissed); err != nil {
 		return RecordResult{}, err
 	}
-	show := !muted && dismissed == nil
+	snoozed := existing.snoozedUntil.Valid && now.Before(msTime(existing.snoozedUntil.Int64))
+	show := !muted && dismissed == nil && !snoozed
 	return RecordResult{Event: merged, Show: show, IsNew: show && reappeared}, nil
 }
 
@@ -232,6 +235,7 @@ SELECT e.hash, e.source, e.type, e.message, e.file, e.line, e.severity, e.stack,
 FROM events e
 WHERE e.project = ?
   AND e.dismissed_at IS NULL
+  AND (e.snoozed_until IS NULL OR e.snoozed_until <= ?)
   AND NOT EXISTS (
     SELECT 1 FROM mutes m
     WHERE m.project = e.project
@@ -241,7 +245,7 @@ WHERE e.project = ?
       )
   )
 ORDER BY e.last_seen DESC
-`, project, KindHash, KindType)
+`, project, timeMS(time.Now()), KindHash, KindType)
 	if err != nil {
 		return nil, fmt.Errorf("inbox load: %w", err)
 	}
@@ -291,6 +295,43 @@ func (d *DB) Dismiss(project string, hashes []string, at time.Time) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("inbox dismiss: %w", err)
+	}
+	return nil
+}
+
+// Snooze hides hashes until until, including new occurrences in that window.
+func (d *DB) Snooze(project string, hashes []string, until time.Time) error {
+	if !d.live() || project == "" || len(hashes) == 0 {
+		return nil
+	}
+	project = key(project)
+	if until.IsZero() {
+		until = time.Now().Add(15 * time.Minute)
+	}
+	ms := timeMS(until)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return fmt.Errorf("inbox snooze: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	stmt, err := tx.Prepare(`UPDATE events SET snoozed_until = ? WHERE project = ? AND hash = ?`)
+	if err != nil {
+		return fmt.Errorf("inbox snooze: %w", err)
+	}
+	defer stmt.Close()
+	for _, h := range hashes {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		if _, err := stmt.Exec(ms, project, h); err != nil {
+			return fmt.Errorf("inbox snooze: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("inbox snooze: %w", err)
 	}
 	return nil
 }
@@ -421,7 +462,13 @@ FROM events WHERE project = ? AND hash = ?`, project, hash)
 	if err != nil {
 		return nil, fmt.Errorf("inbox get: %w", err)
 	}
-	return &row{ev: ev, dismissedAt: dismissed}, nil
+	return &row{ev: ev, dismissedAt: dismissed, snoozedUntil: d.snoozedLocked(project, hash)}, nil
+}
+
+func (d *DB) snoozedLocked(project, hash string) sql.NullInt64 {
+	var until sql.NullInt64
+	_ = d.sql.QueryRow(`SELECT snoozed_until FROM events WHERE project = ? AND hash = ?`, project, hash).Scan(&until)
+	return until
 }
 
 func (d *DB) isMutedLocked(project, hash, typ string) (bool, error) {

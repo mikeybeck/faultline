@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mikey/faultline/internal/event"
+	"github.com/mikey/faultline/internal/sourcemap"
 )
 
 // Payload is the JSON body posted by the browser extension.
@@ -51,7 +52,6 @@ func ToEvent(sourceName, projectDir string, p Payload) event.Event {
 			line = l
 		}
 	}
-	file = ResolveFile(file, projectDir)
 	now := time.Now()
 	rawParts := []string{typ + ": " + msg}
 	if u := strings.TrimSpace(p.URL); u != "" {
@@ -61,7 +61,7 @@ func ToEvent(sourceName, projectDir string, p Payload) event.Event {
 		rawParts = append(rawParts, st)
 	}
 	raw := strings.Join(rawParts, "\n")
-	return event.Event{
+	ev := event.Event{
 		Source:    sourceName,
 		Time:      now,
 		Type:      typ,
@@ -71,11 +71,14 @@ func ToEvent(sourceName, projectDir string, p Payload) event.Event {
 		Severity:  parseSeverity(p.Severity),
 		Stack:     strings.TrimSpace(p.Stack),
 		Raw:       raw,
-		Hash:      event.Fingerprint(sourceName, typ, msg, filepath.Base(file), line),
 		Count:     1,
 		FirstSeen: now,
 		LastSeen:  now,
 	}
+	sourcemap.Apply(sourcemap.NewResolver(projectDir), &ev, p.Column)
+	ev.File = ResolveFile(ev.File, projectDir)
+	ev.Hash = event.Fingerprint(sourceName, ev.Type, ev.Message, filepath.Base(ev.File), ev.Line)
+	return ev
 }
 
 func parseSeverity(s string) event.Severity {

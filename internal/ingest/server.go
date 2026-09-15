@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mikey/faultline/internal/event"
+	"github.com/mikey/faultline/internal/extdist"
 	"github.com/mikey/faultline/internal/source"
 )
 
@@ -18,12 +19,13 @@ const maxBody = 256 << 10
 
 // Options configure the browser ingest HTTP server.
 type Options struct {
-	Name       string
-	ProjectDir string
-	ExtraHosts []string
-	Emit       func(event.Event)
-	OnStatus   func(source.Status)
-	Ready      func(addr string)
+	Name         string
+	ProjectDir   string
+	ExtraHosts   []string
+	ExtensionDir string
+	Emit         func(event.Event)
+	OnStatus     func(source.Status)
+	Ready        func(addr string)
 }
 
 // Serve listens on addr until ctx is cancelled. Addr Disabled is a no-op.
@@ -123,6 +125,26 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"hosts": hosts, "addr": bound})
 	})
+	mux.HandleFunc("/extension.zip", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if opt.ExtensionDir == "" {
+			http.NotFound(w, r)
+			return
+		}
+		data, err := extdist.Zip(opt.ExtensionDir)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="faultline-extension.zip"`)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -130,7 +152,7 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		}
 		cors(w)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = io.WriteString(w, "Faultline browser ingest\nPOST /ingest\nGET /health\nGET /hosts\n")
+		_, _ = io.WriteString(w, "Faultline browser ingest\nPOST /ingest\nGET /health\nGET /hosts\nGET /extension.zip\n")
 	})
 
 	srv := &http.Server{

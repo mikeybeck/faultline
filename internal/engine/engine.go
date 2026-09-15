@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/mikey/faultline/internal/parser"
 	"github.com/mikey/faultline/internal/persist"
 	"github.com/mikey/faultline/internal/source"
+	"github.com/mikey/faultline/internal/sourcemap"
 	"github.com/mikey/faultline/internal/store"
 )
 
@@ -46,9 +48,13 @@ type Engine struct {
 
 	notifyCalls atomic.Int64
 
-	projectDir  string
-	ingestAddr  string
-	boundIngest string
+	projectDir   string
+	ingestAddr   string
+	boundIngest  string
+	maps         *sourcemap.Resolver
+	onNotify     func(event.Event)
+	clearOnGit   bool
+	extensionDir string
 }
 
 func New() *Engine {
@@ -270,6 +276,33 @@ func (e *Engine) Mutes() []persist.Mute {
 	return m
 }
 
+func (e *Engine) SetExtensionDir(dir string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.extensionDir = dir
+}
+
+func (e *Engine) SetNotifyActivate(fn func(event.Event)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onNotify = fn
+	if e.notifier != nil {
+		e.notifier.OnActivate = fn
+	}
+}
+
+func (e *Engine) Snooze(hashes []string, d time.Duration) {
+	if len(hashes) == 0 || d <= 0 {
+		return
+	}
+	until := time.Now().Add(d)
+	if db, project := e.persistState(); db != nil {
+		_ = db.Snooze(project, hashes, until)
+	}
+	e.store.Remove(hashes...)
+	e.pingInbox()
+}
+
 // HasMarks reports whether any current source has a saved resume point.
 func (e *Engine) HasMarks() bool {
 	e.mu.Lock()
@@ -338,6 +371,7 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 	ingestAddr := e.resolveIngestAddrLocked(cfg)
 	projectDir := e.projectDir
 	extraHosts := append([]string(nil), cfg.Browser.ExtraHosts...)
+	extDir := e.extensionDir
 	e.boundIngest = ""
 	e.mu.Unlock()
 
@@ -359,7 +393,14 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 			})
 			continue
 		}
-		p, err := parser.ForType(src.Type, src.Name)
+		ptype := src.Type
+		if src.Type == "command" {
+			ptype = src.Parser
+			if ptype == "" {
+				ptype = "generic"
+			}
+		}
+		p, err := parser.ForType(ptype, src.Name)
 		if err != nil {
 			return err
 		}
@@ -397,6 +438,9 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 	e.notifier.Sound = cfg.Notifications.Sound
 	e.running = true
 	e.notifyCalls.Store(0)
+	e.maps = sourcemap.NewResolver(projectDir)
+	e.clearOnGit = cfg.Inbox.ClearOnCommit
+	e.notifier.OnActivate = e.onNotify
 	marks := e.marks
 	e.mu.Unlock()
 
@@ -464,9 +508,10 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 		go func() {
 			defer e.wg.Done()
 			_, _ = ingest.Serve(ctx, ingestAddr, ingest.Options{
-				Name:       browserName,
-				ProjectDir: projectDir,
-				ExtraHosts: extraHosts,
+				Name:         browserName,
+				ProjectDir:   projectDir,
+				ExtraHosts:   extraHosts,
+				ExtensionDir: extDir,
 				Emit: func(ev event.Event) {
 					select {
 					case parsedCh <- ev:
@@ -491,6 +536,10 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 
 	e.wg.Add(1)
 	go e.ingestLoop(ctx, parsers, lineCh, parsedCh)
+	if cfg.Inbox.ClearOnCommit {
+		e.wg.Add(1)
+		go e.watchGitHEAD(ctx, projectDir)
+	}
 	return nil
 }
 
@@ -566,6 +615,10 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 		if ev == nil {
 			return
 		}
+		e.mu.Lock()
+		maps := e.maps
+		e.mu.Unlock()
+		sourcemap.Apply(maps, ev, 0)
 		db, project := e.persistState()
 		if db != nil && project != "" {
 			res, err := db.Record(project, *ev, backfill)
@@ -685,6 +738,62 @@ func (e *Engine) noteStatus(s source.Status) {
 		}
 	}
 	e.statuses = append(e.statuses, s)
+}
+
+func (e *Engine) watchGitHEAD(ctx context.Context, projectDir string) {
+	defer e.wg.Done()
+	path := gitHEADFile(projectDir)
+	if path == "" {
+		return
+	}
+	last, _ := os.ReadFile(path)
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			cur, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			if string(cur) == string(last) {
+				continue
+			}
+			last = cur
+			e.Clear()
+			e.pingInbox()
+		}
+	}
+}
+
+func gitHEADFile(projectDir string) string {
+	if projectDir == "" {
+		return ""
+	}
+	git := filepath.Join(projectDir, ".git")
+	st, err := os.Stat(git)
+	if err != nil {
+		return ""
+	}
+	if st.IsDir() {
+		return filepath.Join(git, "HEAD")
+	}
+	data, err := os.ReadFile(git)
+	if err != nil {
+		return ""
+	}
+	line := strings.TrimSpace(string(data))
+	const p = "gitdir:"
+	if !strings.HasPrefix(strings.ToLower(line), p) {
+		return ""
+	}
+	dir := strings.TrimSpace(line[len(p):])
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(projectDir, dir)
+	}
+	return filepath.Join(dir, "HEAD")
 }
 
 func (e *Engine) pingInbox() {

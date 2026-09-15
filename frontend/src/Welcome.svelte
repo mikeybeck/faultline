@@ -9,6 +9,7 @@
   export let sound = false
   export let fromStart = true
   export let followLatest = false
+  export let clearOnCommit = false
   export let error = ''
   export let busy = false
   export let recent = []
@@ -22,6 +23,10 @@
   export let onSourceChange
   export let onBrowseEditor = () => {}
   export let onOpenRecent = () => {}
+  export let extDir = ''
+  export let extZipURL = ''
+  export let onRevealExtension = () => {}
+  export let onCopyExtensionPath = () => {}
 
   function projectName(p) {
     if (!p) return ''
@@ -80,6 +85,7 @@
       bind:sound
       bind:fromStart
       bind:followLatest
+      bind:clearOnCommit
       {onSourceChange}
       {onRemove}
       {onBrowseEditor}
@@ -88,10 +94,18 @@
     <details class="help-ext">
       <summary>Browser extension</summary>
       <ol>
-        <li>Chrome / Edge: <code>chrome://extensions</code> → Developer mode → Load unpacked → select the <code>extension/</code> folder in this repo.</li>
-        <li>Firefox 128+: <code>about:debugging#/runtime/this-firefox</code> → Load Temporary Add-on → <code>extension/manifest.json</code>.</li>
+        <li>Click <strong>Open extension folder</strong>, then Chrome / Edge: <code>chrome://extensions</code> → Developer mode → Load unpacked → select that folder.</li>
+        <li>Firefox 128+: <code>about:debugging#/runtime/this-firefox</code> → Load Temporary Add-on → <code>manifest.json</code> in the same folder.</li>
+        <li>While Faultline is watching, download <code>faultline-extension.zip</code> from {extZipURL || 'http://127.0.0.1:9477/extension.zip'}.</li>
         <li>Open your app on localhost. The inbox pill turns green when the extension connects.</li>
       </ol>
+      <div class="row-actions">
+        <button type="button" class="btn" on:click={onRevealExtension}>Open extension folder</button>
+        <button type="button" class="btn" on:click={onCopyExtensionPath}>Copy path</button>
+      </div>
+      {#if extDir}
+        <p class="path" title={extDir}>{extDir}</p>
+      {/if}
       <p class="hint">Custom hosts (not localhost) go in Settings after you start, or in the extension’s Options page.</p>
     </details>
 

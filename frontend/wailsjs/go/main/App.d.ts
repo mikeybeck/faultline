@@ -61,3 +61,9 @@ export function SaveAndWatch(arg1:string,arg2:config.Config,arg3:boolean):Promis
 export function SaveProjectConfig(arg1:config.Config):Promise<void>;
 
 export function Unmute(arg1:string,arg2:string):Promise<void>;
+
+export function RevealExtension():Promise<void>;
+
+export function Snooze(arg1:string,arg2:number):Promise<void>;
+
+export function ExtensionDir():Promise<string>;

@@ -404,6 +404,9 @@ code { font-family: var(--mono); font-size: 0.92em; }
   gap: 8px;
   align-items: center;
 }
+.source-item.command {
+  grid-template-columns: 90px 80px 80px 1fr auto;
+}
 .source-item input, .source-item select {
   background: var(--bg);
   border: 1px solid var(--line);

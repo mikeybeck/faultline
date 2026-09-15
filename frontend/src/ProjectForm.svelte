@@ -6,9 +6,11 @@
   export let sound = false
   export let fromStart = true
   export let followLatest = false
+  export let clearOnCommit = false
   export let extraHostsText = ''
   export let showExtraHosts = false
   export let showFromStart = true
+  export let showClearOnCommit = true
   export let onSourceChange
   export let onRemove
   export let onBrowseEditor = () => {}
@@ -18,6 +20,7 @@
   $: editorSelect = builtins.includes(editorCommand) ? editorCommand : 'custom'
 
   const types = ['generic', 'laravel', 'apache', 'json', 'browser', 'command']
+  const parsers = ['generic', 'json', 'laravel', 'apache']
 
   function pathPlaceholder(type) {
     if (type === 'command') return 'npm run dev'
@@ -33,13 +36,20 @@
   {:else}
     <div class="source-list">
       {#each sources as src, i}
-        <div class="source-item">
+        <div class="source-item" class:command={src.type === 'command'}>
           <input value={src.name} on:input={(e) => onSourceChange(i, { name: e.target.value })} placeholder="name" />
           <select value={src.type} on:change={(e) => onSourceChange(i, { type: e.target.value })}>
             {#each types as t}
               <option value={t}>{t}</option>
             {/each}
           </select>
+          {#if src.type === 'command'}
+            <select value={src.parser || 'generic'} on:change={(e) => onSourceChange(i, { parser: e.target.value })} title="Parser for command output">
+              {#each parsers as t}
+                <option value={t}>{t}</option>
+              {/each}
+            </select>
+          {/if}
           <input
             class="path-input"
             value={src.path}
@@ -93,6 +103,9 @@
     <label><input type="checkbox" bind:checked={fromStart} /> Load existing log lines</label>
   {/if}
   <label><input type="checkbox" bind:checked={followLatest} /> Always select the most recent error</label>
+  {#if showClearOnCommit}
+    <label><input type="checkbox" bind:checked={clearOnCommit} /> Clear inbox when git HEAD changes</label>
+  {/if}
 </div>
 
 {#if showExtraHosts}

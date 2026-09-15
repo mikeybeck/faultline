@@ -21,6 +21,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed all:extension
+var extensionFS embed.FS
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: faultline [flags]\n\n")
@@ -44,6 +47,7 @@ func main() {
 	}
 
 	gui := NewApp(*configPath, ingestFromStart)
+	gui.InstallExtension(extensionFS)
 	err := wails.Run(&options.App{
 		Title:     "Faultline",
 		Width:     1200,

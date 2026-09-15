@@ -22,6 +22,11 @@ sources:
   # - name: vite
   #   type: command
   #   path: npm run dev
+  #   parser: generic   # generic | json | laravel | apache
+
+# inbox:
+#   followLatest: false
+#   clearOnCommit: true   # hide current errors when .git/HEAD changes
 
   # Browser errors via the unpacked extension in extension/
   # (also starts automatically on 127.0.0.1:9477 while watching)

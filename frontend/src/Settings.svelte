@@ -9,6 +9,7 @@
   export let sound = false
   export let fromStart = true
   export let followLatest = false
+  export let clearOnCommit = false
   export let extraHostsText = ''
   export let mutes = []
   export let recent = []
@@ -27,8 +28,12 @@
   export let onOpenRecent = () => {}
   export let onNewProject = () => {}
   export let onOpenLog = () => {}
+  export let onRevealExtension = () => {}
+  export let onCopyExtensionPath = () => {}
   export let onClose = () => {}
   export let logPath = ''
+  export let extDir = ''
+  export let extZipURL = ''
 
   function projectName(p) {
     if (!p) return ''
@@ -62,6 +67,7 @@
     bind:sound
     bind:fromStart
     bind:followLatest
+    bind:clearOnCommit
     {extraHostsText}
     showExtraHosts={true}
     {onSourceChange}
@@ -106,6 +112,16 @@
   </div>
   <div class="row-actions">
     <button type="button" class="btn" on:click={onOpenLog}>Open Faultline log</button>
+  </div>
+
+  <div class="field">
+    <span class="lbl">Browser extension</span>
+    <div class="path" title={extDir}>{extDir || 'Bundled with the app'}</div>
+    <p class="hint">Load unpacked from that folder, or while watching download {extZipURL || 'http://127.0.0.1:9477/extension.zip'}.</p>
+  </div>
+  <div class="row-actions">
+    <button type="button" class="btn" on:click={onRevealExtension}>Open extension folder</button>
+    <button type="button" class="btn" on:click={onCopyExtensionPath}>Copy path</button>
   </div>
 
   <div class="row-actions">

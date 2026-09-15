@@ -110,6 +110,18 @@ export function SaveProjectConfig(arg1) {
   return window['go']['main']['App']['SaveProjectConfig'](arg1);
 }
 
+export function RevealExtension() {
+  return window['go']['main']['App']['RevealExtension']();
+}
+
+export function Snooze(arg1, arg2) {
+  return window['go']['main']['App']['Snooze'](arg1, arg2);
+}
+
+export function ExtensionDir() {
+  return window['go']['main']['App']['ExtensionDir']();
+}
+
 export function Unmute(arg1, arg2) {
   return window['go']['main']['App']['Unmute'](arg1, arg2);
 }
