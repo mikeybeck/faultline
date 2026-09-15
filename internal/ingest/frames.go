@@ -134,9 +134,17 @@ func fileExists(root, path string) bool {
 	root = filepath.Clean(root)
 	path = filepath.Clean(path)
 	rel, err := filepath.Rel(root, path)
-	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		_, err = os.Stat(path)
-		return err == nil
+	if err != nil {
+		return false
 	}
-	return false
+	if !filepath.IsLocal(rel) {
+		return false
+	}
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		return false
+	}
+	defer dir.Close()
+	_, err = dir.Stat(rel)
+	return err == nil
 }

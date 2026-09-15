@@ -293,11 +293,19 @@ func (r *Resolver) fileExists(path string) bool {
 	root := filepath.Clean(r.project)
 	path = filepath.Clean(path)
 	rel, err := filepath.Rel(root, path)
-	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		_, err = os.Stat(path)
-		return err == nil
+	if err != nil {
+		return false
 	}
-	return false
+	if !filepath.IsLocal(rel) {
+		return false
+	}
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		return false
+	}
+	defer dir.Close()
+	_, err = dir.Stat(rel)
+	return err == nil
 }
 
 func (r *Resolver) readFile(path string) ([]byte, error) {
@@ -307,8 +315,21 @@ func (r *Resolver) readFile(path string) ([]byte, error) {
 	root := filepath.Clean(r.project)
 	path = filepath.Clean(path)
 	rel, err := filepath.Rel(root, path)
-	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return os.ReadFile(path)
+	if err != nil {
+		return nil, os.ErrNotExist
 	}
-	return nil, os.ErrNotExist
+	if !filepath.IsLocal(rel) {
+		return nil, os.ErrNotExist
+	}
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+	f, err := dir.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(f)
 }
