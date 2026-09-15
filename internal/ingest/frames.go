@@ -127,7 +127,16 @@ func shortestPath(paths []string) string {
 	return best
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+func fileExists(root, path string) bool {
+	if root == "" || path == "" {
+		return false
+	}
+	root = filepath.Clean(root)
+	path = filepath.Clean(path)
+	rel, err := filepath.Rel(root, path)
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		_, err = os.Stat(path)
+		return err == nil
+	}
+	return false
 }

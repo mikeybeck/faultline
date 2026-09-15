@@ -131,7 +131,7 @@ func ResolveFile(file, projectDir string) string {
 		return strings.TrimPrefix(file, "/")
 	}
 	if filepath.IsAbs(file) {
-		if fileExists(file) {
+		if fileExists(projectDir, file) {
 			return file
 		}
 		if hit := findByBase(projectDir, filepath.Base(file)); hit != "" {
@@ -141,7 +141,7 @@ func ResolveFile(file, projectDir string) string {
 	}
 	rel := strings.TrimPrefix(file, "/")
 	cand := filepath.Join(projectDir, rel)
-	if fileExists(cand) {
+	if fileExists(projectDir, cand) {
 		return cand
 	}
 	if hit := findByBase(projectDir, rel); hit != "" {

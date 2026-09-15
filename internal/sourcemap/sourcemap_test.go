@@ -60,6 +60,40 @@ func TestResolverReadsSiblingMap(t *testing.T) {
 	}
 }
 
+func TestResolverIgnoresMapOutsideProject(t *testing.T) {
+	dir := t.TempDir()
+	js := filepath.Join(dir, "bundle.js")
+	if err := os.WriteFile(js, []byte("//# sourceMappingURL=../../secret.map\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(filepath.Dir(dir), "secret.map")
+	raw, _ := json.Marshal(map[string]any{
+		"version":  3,
+		"sources":  []string{"stolen.ts"},
+		"mappings": encodeVLQ(0) + encodeVLQ(0) + encodeVLQ(0) + encodeVLQ(0),
+	})
+	if err := os.WriteFile(secret, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(secret) })
+	r := NewResolver(dir)
+	if _, _, ok := r.Remap(js, 1, 0); ok {
+		t.Fatal("should not follow sourceMappingURL outside the project")
+	}
+}
+
+func TestIsLocalURL(t *testing.T) {
+	if !isLocalURL("http://127.0.0.1:5173/app.js") {
+		t.Fatal("loopback should be local")
+	}
+	if isLocalURL("http://example.com/app.js.map") {
+		t.Fatal("remote host should be rejected")
+	}
+	if isLocalURL("http://169.254.169.254/latest/meta-data") {
+		t.Fatal("link-local should be rejected")
+	}
+}
+
 func TestApplyRewritesEvent(t *testing.T) {
 	dir := t.TempDir()
 	js := filepath.Join(dir, "index-BMpqHCu2.js")

@@ -80,6 +80,19 @@ func TestResolveFileViteFS(t *testing.T) {
 	}
 }
 
+func TestResolveFileRejectsTraversal(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(filepath.Dir(dir), "secret-outside.js")
+	if err := os.WriteFile(outside, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(outside) })
+	got := ResolveFile("../"+filepath.Base(outside), dir)
+	if got == outside {
+		t.Fatalf("resolved file outside project: %q", got)
+	}
+}
+
 func TestResolveFileByBasename(t *testing.T) {
 	dir := t.TempDir()
 	full := filepath.Join(dir, "src", "components", "Pay.js")

@@ -56,13 +56,13 @@ func (r *Resolver) Remap(file string, line, col int) (string, int, bool) {
 	base := filepath.Dir(localPath(file))
 	if base != "" && base != "." {
 		joined := filepath.Clean(filepath.Join(base, orig))
-		if fileExists(joined) {
+		if r.fileExists(joined) {
 			return joined, ol, true
 		}
 	}
 	if r.project != "" {
 		cand := filepath.Join(r.project, orig)
-		if fileExists(cand) {
+		if r.fileExists(cand) {
 			return cand, ol, true
 		}
 	}
@@ -114,15 +114,15 @@ func (r *Resolver) readBeside(file string) ([]byte, bool) {
 	if p == "" {
 		return nil, false
 	}
-	if data, err := os.ReadFile(p + ".map"); err == nil {
+	if data, err := r.readFile(p + ".map"); err == nil {
 		return data, true
 	}
-	js, err := os.ReadFile(p)
+	js, err := r.readFile(p)
 	if err != nil {
 		return nil, false
 	}
 	if u := mappingURL(string(js)); u != "" && !strings.Contains(u, "://") {
-		data, err := os.ReadFile(filepath.Join(filepath.Dir(p), u))
+		data, err := r.readFile(filepath.Join(filepath.Dir(p), u))
 		if err == nil {
 			return data, true
 		}
@@ -131,14 +131,10 @@ func (r *Resolver) readBeside(file string) ([]byte, bool) {
 }
 
 func (r *Resolver) fetchHTTP(file string) ([]byte, bool) {
-	u, err := url.Parse(file)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		return nil, false
-	}
-	if !isLoopback(u.Hostname()) {
-		return nil, false
-	}
 	jsURL := strings.TrimSpace(file)
+	if !isLocalURL(jsURL) {
+		return nil, false
+	}
 	body, err := r.get(jsURL)
 	if err == nil {
 		if ref := mappingURL(string(body)); ref != "" {
@@ -155,6 +151,9 @@ func (r *Resolver) fetchHTTP(file string) ([]byte, bool) {
 }
 
 func (r *Resolver) get(raw string) ([]byte, error) {
+	if !isLocalURL(raw) {
+		return nil, io.EOF
+	}
 	resp, err := r.client.Get(raw)
 	if err != nil {
 		return nil, err
@@ -203,7 +202,7 @@ func (r *Resolver) findByBase(file string) *Map {
 	if hit == "" {
 		return nil
 	}
-	data, err := os.ReadFile(hit)
+	data, err := r.readFile(hit)
 	if err != nil {
 		return nil
 	}
@@ -267,6 +266,14 @@ func localPath(file string) string {
 	return file
 }
 
+func isLocalURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	return isLoopback(u.Hostname())
+}
+
 func isLoopback(host string) bool {
 	host = strings.TrimSpace(host)
 	if host == "" {
@@ -279,7 +286,29 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+func (r *Resolver) fileExists(path string) bool {
+	if r == nil || r.project == "" || path == "" {
+		return false
+	}
+	root := filepath.Clean(r.project)
+	path = filepath.Clean(path)
+	rel, err := filepath.Rel(root, path)
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		_, err = os.Stat(path)
+		return err == nil
+	}
+	return false
+}
+
+func (r *Resolver) readFile(path string) ([]byte, error) {
+	if r == nil || r.project == "" || path == "" {
+		return nil, os.ErrNotExist
+	}
+	root := filepath.Clean(r.project)
+	path = filepath.Clean(path)
+	rel, err := filepath.Rel(root, path)
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return os.ReadFile(path)
+	}
+	return nil, os.ErrNotExist
 }
