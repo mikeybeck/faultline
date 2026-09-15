@@ -14,6 +14,7 @@ export namespace config {
 	}
 	export class InboxConfig {
 	    followLatest: boolean;
+	    clearOnCommit: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new InboxConfig(source);
@@ -22,6 +23,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.followLatest = source["followLatest"];
+	        this.clearOnCommit = source["clearOnCommit"];
 	    }
 	}
 	export class EditorConfig {
@@ -54,6 +56,7 @@ export namespace config {
 	    name: string;
 	    type: string;
 	    path: string;
+	    parser: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SourceConfig(source);
@@ -64,6 +67,7 @@ export namespace config {
 	        this.name = source["name"];
 	        this.type = source["type"];
 	        this.path = source["path"];
+	        this.parser = source["parser"];
 	    }
 	}
 	export class Config {
@@ -266,6 +270,8 @@ export namespace main {
 	    recent: statefile.Project[];
 	    editors: string[];
 	    ingestAddr: string;
+	    extDir: string;
+	    extZipURL: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Bootstrap(source);
@@ -282,6 +288,8 @@ export namespace main {
 	        this.recent = this.convertValues(source["recent"], statefile.Project);
 	        this.editors = source["editors"];
 	        this.ingestAddr = source["ingestAddr"];
+	        this.extDir = source["extDir"];
+	        this.extZipURL = source["extZipURL"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

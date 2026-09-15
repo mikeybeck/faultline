@@ -3,6 +3,7 @@
 import {config} from '../models';
 import {main} from '../models';
 import {detect} from '../models';
+import {fs} from '../models';
 import {persist} from '../models';
 import {statefile} from '../models';
 
@@ -26,11 +27,15 @@ export function Dismiss(arg1:Array<string>):Promise<void>;
 
 export function DismissMatching(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function ExtensionDir():Promise<string>;
+
 export function FaultlineLogPath():Promise<string>;
 
 export function GetEvent(arg1:string):Promise<main.EventDTO>;
 
 export function GetState(arg1:string,arg2:string,arg3:string,arg4:string):Promise<main.AppState>;
+
+export function InstallExtension(arg1:fs.FS):Promise<void>;
 
 export function Mute(arg1:string,arg2:string):Promise<void>;
 
@@ -56,14 +61,12 @@ export function RecentProjects():Promise<Array<statefile.Project>>;
 
 export function ReportError(arg1:string,arg2:string):Promise<void>;
 
+export function RevealExtension():Promise<void>;
+
 export function SaveAndWatch(arg1:string,arg2:config.Config,arg3:boolean):Promise<void>;
 
 export function SaveProjectConfig(arg1:config.Config):Promise<void>;
 
-export function Unmute(arg1:string,arg2:string):Promise<void>;
-
-export function RevealExtension():Promise<void>;
-
 export function Snooze(arg1:string,arg2:number):Promise<void>;
 
-export function ExtensionDir():Promise<string>;
+export function Unmute(arg1:string,arg2:string):Promise<void>;

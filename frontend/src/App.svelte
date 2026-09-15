@@ -611,6 +611,8 @@
       toast(extDir)
     }
   }
+
+  async function doMute(kind, value) {
     try {
       await Mute(kind, value)
       selected = null

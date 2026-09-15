@@ -42,6 +42,10 @@ export function DismissMatching(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['DismissMatching'](arg1, arg2, arg3, arg4);
 }
 
+export function ExtensionDir() {
+  return window['go']['main']['App']['ExtensionDir']();
+}
+
 export function FaultlineLogPath() {
   return window['go']['main']['App']['FaultlineLogPath']();
 }
@@ -52,6 +56,10 @@ export function GetEvent(arg1) {
 
 export function GetState(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetState'](arg1, arg2, arg3, arg4);
+}
+
+export function InstallExtension(arg1) {
+  return window['go']['main']['App']['InstallExtension'](arg1);
 }
 
 export function Mute(arg1, arg2) {
@@ -102,6 +110,10 @@ export function ReportError(arg1, arg2) {
   return window['go']['main']['App']['ReportError'](arg1, arg2);
 }
 
+export function RevealExtension() {
+  return window['go']['main']['App']['RevealExtension']();
+}
+
 export function SaveAndWatch(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveAndWatch'](arg1, arg2, arg3);
 }
@@ -110,16 +122,8 @@ export function SaveProjectConfig(arg1) {
   return window['go']['main']['App']['SaveProjectConfig'](arg1);
 }
 
-export function RevealExtension() {
-  return window['go']['main']['App']['RevealExtension']();
-}
-
 export function Snooze(arg1, arg2) {
   return window['go']['main']['App']['Snooze'](arg1, arg2);
-}
-
-export function ExtensionDir() {
-  return window['go']['main']['App']['ExtensionDir']();
 }
 
 export function Unmute(arg1, arg2) {
