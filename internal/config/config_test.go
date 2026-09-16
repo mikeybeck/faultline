@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/mikey/faultline/internal/event"
 )
 
 func TestLoadAndValidate(t *testing.T) {
@@ -103,6 +105,40 @@ func TestSaveRoundTrip(t *testing.T) {
 	}
 	if len(got.Sources) != 1 || got.Sources[0].Type != "generic" {
 		t.Fatalf("round trip = %+v", got.Sources)
+	}
+}
+
+func TestIgnoreRules(t *testing.T) {
+	cfg := &Config{Inbox: InboxConfig{Ignore: []IgnoreRule{
+		{Type: "DeprecationWarning"},
+		{Message: "ECONNRESET"},
+		{Path: "**/node_modules/**"},
+		{Regex: "heartbeat"},
+	}}}
+	if !cfg.Ignores(event.Event{Type: "DeprecationWarning", Message: "x"}) {
+		t.Fatal("type")
+	}
+	if !cfg.Ignores(event.Event{Type: "Error", Message: "socket ECONNRESET"}) {
+		t.Fatal("message")
+	}
+	if !cfg.Ignores(event.Event{Type: "Error", Message: "x", File: "app/node_modules/foo/index.js"}) {
+		t.Fatal("path")
+	}
+	if !cfg.Ignores(event.Event{Type: "Error", Message: "heartbeat ping"}) {
+		t.Fatal("regex")
+	}
+	if cfg.Ignores(event.Event{Type: "TypeError", Message: "boom", File: "src/app.js"}) {
+		t.Fatal("should not ignore")
+	}
+}
+
+func TestValidateRejectsBadIgnoreRegex(t *testing.T) {
+	cfg := &Config{
+		Sources: []SourceConfig{{Type: "generic", Path: "a.log"}},
+		Inbox:   InboxConfig{Ignore: []IgnoreRule{{Regex: "("}}},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected regex error")
 	}
 }
 

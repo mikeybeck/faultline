@@ -89,6 +89,45 @@ func TestEngineIngestsGenericLog(t *testing.T) {
 	if items[0].Type != "TypeError" {
 		t.Fatalf("type = %q", items[0].Type)
 	}
+	if len(items[0].Context) == 0 {
+		t.Fatal("expected nearby log context")
+	}
+}
+
+func TestEngineIgnoresConfiguredRules(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "app.log")
+	if err := os.WriteFile(logPath, []byte("ERROR TypeError: boom\nERROR DeprecationWarning: old api\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		Sources: []config.SourceConfig{{Name: "app", Type: "generic", Path: logPath}},
+		Editor:  config.EditorConfig{Command: "code"},
+		Inbox:   config.InboxConfig{Ignore: []config.IgnoreRule{{Type: "DeprecationWarning"}}},
+	}
+	eng := testEngine()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := eng.Start(ctx, cfg, true); err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Stop()
+	deadline := time.After(3 * time.Second)
+	for {
+		if eng.Store().Len() >= 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for event")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	time.Sleep(400 * time.Millisecond)
+	items := eng.Store().List("")
+	if len(items) != 1 || items[0].Type == "DeprecationWarning" {
+		t.Fatalf("ignore failed: %+v", items)
+	}
 }
 
 func TestEngineBackfillDoesNotNotify(t *testing.T) {
@@ -698,4 +737,28 @@ func TestEngineIngestsCommand(t *testing.T) {
 	if got := eng.Store().List("")[0].Type; got != "TypeError" {
 		t.Fatalf("type = %q", got)
 	}
+}
+
+func TestEngineSnoozeRestoresAfterExpiry(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{
+		Sources: []config.SourceConfig{{Name: "browser", Type: "browser", Path: "127.0.0.1:0"}},
+		Editor:  config.EditorConfig{Command: "code"},
+	}
+	eng, _ := persistEngine(t, dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := eng.Start(ctx, cfg, true); err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Stop()
+	addr := waitBound(t, eng)
+	postBrowser(t, addr, `{"type":"TypeError","message":"later","file":"src/app.js","line":3}`)
+	waitLen(t, eng, 1, 2*time.Second)
+	hash := eng.Store().List("")[0].Hash
+	eng.Snooze([]string{hash}, 50*time.Millisecond)
+	if eng.Store().Len() != 0 {
+		t.Fatal("expected empty while snoozed")
+	}
+	waitLen(t, eng, 1, 4*time.Second)
 }

@@ -251,3 +251,26 @@ func TestSnoozeHidesUntil(t *testing.T) {
 		t.Fatal("occurrence during snooze should stay hidden")
 	}
 }
+
+func TestRecordGroupsNormalizedMessages(t *testing.T) {
+	db := testDB(t)
+	t0 := time.Now().Truncate(time.Millisecond)
+	a := sample("/p", `user 123e4567-e89b-12d3-a456-426614174000 failed for "a" id 9001`, t0)
+	b := sample("/p", `user 999e4567-e89b-12d3-a456-426614174000 failed for "b" id 4242`, t0.Add(time.Second))
+	if _, err := db.Record("/p", a, false); err != nil {
+		t.Fatal(err)
+	}
+	res, err := db.Record("/p", b, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsNew {
+		t.Fatal("expected same fingerprint")
+	}
+	if res.Event.Count != 2 {
+		t.Fatalf("count=%d", res.Event.Count)
+	}
+	if len(res.Event.Samples) < 2 {
+		t.Fatalf("samples=%v", res.Event.Samples)
+	}
+}

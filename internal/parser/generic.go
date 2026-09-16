@@ -188,7 +188,7 @@ func looksLikeGenericError(line string) bool {
 	keys := []string{
 		"error", "exception", "fatal", "panic", "traceback", "failed", "failure",
 		"warning", "warn", "critical", "emergency", "segfault", "uncaught",
-		"unhandled", "denied",
+		"unhandled", "denied", "forbidden", "unauthorized",
 	}
 	for _, k := range keys {
 		if strings.Contains(lower, k) {
@@ -209,7 +209,9 @@ func genericSeverity(line string) event.Severity {
 		return event.SeverityWarning
 	case strings.Contains(lower, "error"), strings.Contains(lower, "exception"),
 		strings.Contains(lower, "traceback"), strings.Contains(lower, "fail"),
-		strings.Contains(lower, "uncaught"), strings.Contains(lower, "unhandled"):
+		strings.Contains(lower, "uncaught"), strings.Contains(lower, "unhandled"),
+		strings.Contains(lower, "denied"), strings.Contains(lower, "forbidden"),
+		strings.Contains(lower, "unauthorized"):
 		return event.SeverityError
 	default:
 		if genericTypeRe.MatchString(line) {

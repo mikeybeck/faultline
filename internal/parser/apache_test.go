@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mikey/faultline/internal/event"
 )
 
 func TestApacheParseSample(t *testing.T) {
@@ -45,6 +47,20 @@ func TestApacheParseSample(t *testing.T) {
 	if types[2] != "AH00124" && !strings.Contains(types[2], "AH00124") {
 		// May be "Apache" if split failed — check message instead via re-parse
 		t.Logf("redirect type = %q", types[2])
+	}
+}
+
+func TestApacheCapturesForbiddenBody(t *testing.T) {
+	p := NewApache("apache")
+	got := p.Feed(`[Wed Jul 15 14:31:15.000000 2026] [php:notice] [pid 1000] [client 127.0.0.1:1] 403 Forbidden: Invalid sorting parameters.`)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 event, got %#v", got)
+	}
+	if !strings.Contains(got[0].Message, "Invalid sorting parameters") {
+		t.Fatalf("message = %q", got[0].Message)
+	}
+	if got[0].Severity != event.SeverityError {
+		t.Fatalf("severity = %q", got[0].Severity)
 	}
 }
 

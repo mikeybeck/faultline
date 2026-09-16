@@ -26,6 +26,7 @@ type Options struct {
 	Emit         func(event.Event)
 	OnStatus     func(source.Status)
 	Ready        func(addr string)
+	OnActivate   func(hash string)
 }
 
 // Serve listens on addr until ctx is cancelled. Addr Disabled is a no-op.
@@ -100,6 +101,18 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = io.WriteString(w, `{"ok":true}`)
 	})
+	mux.HandleFunc("/activate", func(w http.ResponseWriter, r *http.Request) {
+		if !loopbackRequest(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		hash := strings.TrimSpace(r.URL.Query().Get("hash"))
+		if hash != "" && opt.OnActivate != nil {
+			opt.OnActivate(hash)
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = io.WriteString(w, "ok\n")
+	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		cors(w)
 		if r.Method == http.MethodOptions {
@@ -152,7 +165,7 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		}
 		cors(w)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = io.WriteString(w, "Faultline browser ingest\nPOST /ingest\nGET /health\nGET /hosts\nGET /extension.zip\n")
+		_, _ = io.WriteString(w, "Faultline browser ingest\nPOST /ingest\nGET /health\nGET /hosts\nGET /activate\nGET /extension.zip\n")
 	})
 
 	srv := &http.Server{
@@ -190,6 +203,18 @@ func Serve(ctx context.Context, addr string, opt Options) (string, error) {
 		return bound, err
 	}
 	return bound, nil
+}
+
+func loopbackRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func cors(w http.ResponseWriter) {

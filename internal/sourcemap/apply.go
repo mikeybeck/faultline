@@ -17,9 +17,16 @@ func Apply(r *Resolver, ev *event.Event, column int) {
 		return
 	}
 	if ev.File != "" && ev.Line > 0 {
+		gen, genLine := ev.File, ev.Line
 		if file, line, ok := r.Remap(ev.File, ev.Line, column); ok {
 			ev.File = file
 			ev.Line = line
+		}
+		if ev.Snippet == "" {
+			ev.Snippet = r.Snippet(ev.File, ev.Line)
+		}
+		if ev.Snippet == "" {
+			ev.Snippet = r.snippetFromGenerated(gen, genLine, column)
 		}
 	}
 	if ev.Stack != "" {

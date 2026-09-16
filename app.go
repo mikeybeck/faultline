@@ -510,6 +510,9 @@ type EventDTO struct {
 	Severity  string         `json:"severity"`
 	Stack     string         `json:"stack"`
 	Raw       string         `json:"raw"`
+	Snippet   string         `json:"snippet"`
+	Context   []string       `json:"context"`
+	Samples   []string       `json:"samples"`
 	Hash      string         `json:"hash"`
 	Count     int            `json:"count"`
 	FirstSeen string         `json:"firstSeen"`
@@ -536,6 +539,15 @@ func toDTO(ev event.Event, projectDir string) EventDTO {
 		LastSeen:  formatTime(ev.LastSeen),
 		Title:     ev.Title(),
 		Location:  ev.Location(),
+		Snippet:   ev.Snippet,
+		Context:   ev.Context,
+		Samples:   ev.Samples,
+	}
+	if d.Context == nil {
+		d.Context = []string{}
+	}
+	if d.Samples == nil {
+		d.Samples = []string{}
 	}
 	if ev.Stack != "" {
 		d.Frames = ingest.ParseFrames(ev.Stack, projectDir)
@@ -550,6 +562,9 @@ func toSummaryDTO(ev event.Event) EventDTO {
 	d := toDTO(ev, "")
 	d.Stack = ""
 	d.Raw = ""
+	d.Snippet = ""
+	d.Context = []string{}
+	d.Samples = []string{}
 	d.Frames = []ingest.Frame{}
 	return d
 }

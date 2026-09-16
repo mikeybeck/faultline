@@ -11,6 +11,7 @@
   export let followLatest = false
   export let clearOnCommit = false
   export let extraHostsText = ''
+  export let ignoreText = ''
   export let mutes = []
   export let recent = []
   export let error = ''
@@ -24,6 +25,7 @@
   export let onSourceChange
   export let onBrowseEditor = () => {}
   export let onExtraHosts = () => {}
+  export let onIgnore = () => {}
   export let onUnmute = () => {}
   export let onOpenRecent = () => {}
   export let onNewProject = () => {}
@@ -75,6 +77,18 @@
     {onBrowseEditor}
     {onExtraHosts}
   />
+
+  <div class="field">
+    <label for="ignore-rules">Ignore rules</label>
+    <textarea
+      id="ignore-rules"
+      rows="5"
+      value={ignoreText}
+      placeholder={"type: DeprecationWarning\nmessage: ECONNRESET\npath: **/node_modules/**\nregex: heartbeat"}
+      on:input={(e) => onIgnore(e.target.value)}
+    ></textarea>
+    <p class="hint">One rule per line. Prefix with <code>type:</code>, <code>message:</code>, <code>path:</code>, <code>source:</code>, or <code>regex:</code>. Save and restart to apply.</p>
+  </div>
 
   {#if mutes.length}
     <div class="field">

@@ -109,7 +109,8 @@
           const lower = msg.toLowerCase()
           const vueSwallowed = lower.includes('[vue warn]') && lower.includes('error in')
           const looksThrown = /^(?:uncaught )?[\w$]*(?:error|exception)\b/i.test(msg)
-          if (vueSwallowed || looksThrown) {
+          const looksHTTP = severity === 'error' && /^(?:http\/\d(?:\.\d)?\s+)?[45]\d\d\b/i.test(msg)
+          if (vueSwallowed || looksThrown || looksHTTP) {
             send({
               type: vueSwallowed ? 'VueError' : 'ConsoleError',
               message: msg,
@@ -198,21 +199,89 @@
             !url.includes('127.0.0.1:9477') &&
             !url.includes('localhost:9477')
           ) {
-            send({
-              type: 'FailedFetch',
-              message: (res.status || 0) + ' ' + (res.statusText || '') + ' ' + url,
-              file: location.href,
-              line: 0,
-              column: 0,
-              stack: '',
-              url: location.href,
-              severity: res.status >= 500 ? 'error' : 'warning',
-            })
+            const status = (res.status || 0) + ' ' + (res.statusText || '') + ' ' + url
+            const sendFail = (extra) => {
+              send({
+                type: 'FailedFetch',
+                message: extra ? status + '\n' + extra : status,
+                file: location.href,
+                line: 0,
+                column: 0,
+                stack: '',
+                url: location.href,
+                severity: res.status >= 500 ? 'error' : 'warning',
+              })
+            }
+            try {
+              res
+                .clone()
+                .text()
+                .then((t) => sendFail(String(t || '').slice(0, 500)))
+                .catch(() => sendFail(''))
+            } catch (_) {
+              sendFail('')
+            }
           }
         } catch (_) {}
         return res
       })
     }
+  }
+
+  const OrigXHR = window.XMLHttpRequest
+  if (typeof OrigXHR === 'function') {
+    function WrappedXHR() {
+      const xhr = new OrigXHR()
+      xhr.addEventListener('loadend', () => {
+        try {
+          const url = String(xhr.responseURL || '')
+          if (
+            xhr.status >= 400 &&
+            xhr.status !== 404 &&
+            !url.includes('127.0.0.1:9477') &&
+            !url.includes('localhost:9477')
+          ) {
+            const extra = xhrBody(xhr)
+            send({
+              type: 'FailedXHR',
+              message: xhr.status + ' ' + (xhr.statusText || '') + ' ' + url + (extra ? '\n' + extra : ''),
+              file: location.href,
+              line: 0,
+              column: 0,
+              stack: '',
+              url: location.href,
+              severity: xhr.status >= 500 ? 'error' : 'warning',
+            })
+          }
+        } catch (_) {}
+      })
+      return xhr
+    }
+    WrappedXHR.prototype = OrigXHR.prototype
+    window.XMLHttpRequest = WrappedXHR
+  }
+
+  function xhrBody(xhr) {
+    try {
+      const rt = xhr.responseType
+      if (!rt || rt === '' || rt === 'text') {
+        return String(xhr.responseText || '').slice(0, 500)
+      }
+      if (rt === 'json') {
+        const v = xhr.response
+        if (v == null) return ''
+        if (typeof v === 'string') return v.slice(0, 500)
+        try {
+          return JSON.stringify(v).slice(0, 500)
+        } catch (_) {
+          return String(v).slice(0, 500)
+        }
+      }
+      if (typeof xhr.response === 'string') {
+        return xhr.response.slice(0, 500)
+      }
+    } catch (_) {}
+    return ''
   }
 
   function viteMessage(el) {

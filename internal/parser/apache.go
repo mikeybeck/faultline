@@ -121,6 +121,9 @@ func parseApacheSeverity(moduleLevel, message string) (event.Severity, string) {
 		return event.SeverityError, module
 	case strings.Contains(lower, "warn"), strings.Contains(lower, "deprecated"), strings.Contains(lower, "notice"):
 		return event.SeverityWarning, module
+	case strings.Contains(lower, "denied"), strings.Contains(lower, "forbidden"),
+		strings.Contains(lower, "unauthorized"):
+		return event.SeverityError, module
 	default:
 		return event.SeverityInfo, module
 	}
@@ -128,7 +131,7 @@ func parseApacheSeverity(moduleLevel, message string) (event.Severity, string) {
 
 func looksLikeError(message string) bool {
 	lower := strings.ToLower(message)
-	keys := []string{"error", "exception", "fatal", "failed", "warning", "denied", "segfault"}
+	keys := []string{"error", "exception", "fatal", "failed", "warning", "denied", "segfault", "forbidden", "unauthorized"}
 	for _, k := range keys {
 		if strings.Contains(lower, k) {
 			return true

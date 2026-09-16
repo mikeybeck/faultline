@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -38,8 +39,19 @@ type NotifyConfig struct {
 
 // InboxConfig controls desktop inbox behavior.
 type InboxConfig struct {
-	FollowLatest  bool `yaml:"followLatest" json:"followLatest"`
-	ClearOnCommit bool `yaml:"clearOnCommit" json:"clearOnCommit"`
+	FollowLatest  bool         `yaml:"followLatest" json:"followLatest"`
+	ClearOnCommit bool         `yaml:"clearOnCommit" json:"clearOnCommit"`
+	Ignore        []IgnoreRule `yaml:"ignore,omitempty" json:"ignore,omitempty"`
+	Views         []SavedView  `yaml:"views,omitempty" json:"views,omitempty"`
+}
+
+// SavedView is a named inbox filter.
+type SavedView struct {
+	Name     string `yaml:"name" json:"name"`
+	Filter   string `yaml:"filter,omitempty" json:"filter,omitempty"`
+	Severity string `yaml:"severity,omitempty" json:"severity,omitempty"`
+	Source   string `yaml:"source,omitempty" json:"source,omitempty"`
+	Sort     string `yaml:"sort,omitempty" json:"sort,omitempty"`
 }
 
 // EditorConfig controls opening files at a location.
@@ -132,6 +144,14 @@ func (c *Config) Validate() error {
 			default:
 				return fmt.Errorf("config: sources[%d].parser must be generic, laravel, apache, or json, got %q", i, s.Parser)
 			}
+		}
+	}
+	if err := validateIgnore(c.Inbox.Ignore); err != nil {
+		return err
+	}
+	for i, v := range c.Inbox.Views {
+		if strings.TrimSpace(v.Name) == "" {
+			return fmt.Errorf("config: inbox.views[%d].name is required", i)
 		}
 	}
 	return nil

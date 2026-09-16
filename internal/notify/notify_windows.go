@@ -4,6 +4,8 @@ package notify
 
 import (
 	"os"
+	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -38,6 +40,42 @@ var (
 	enumMu       sync.Mutex
 	foundHwnd    uintptr
 )
+
+func sendWindows(title, body string, sound bool, onClick func()) error {
+	_ = flashTaskbar(sound)
+	ps := `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$n = New-Object System.Windows.Forms.NotifyIcon
+$n.Icon = [System.Drawing.SystemIcons]::Warning
+$n.Visible = $true
+$clicked = $false
+$n.add_BalloonTipClicked({ $script:clicked = $true })
+$n.ShowBalloonTip(10000, $env:FAULTLINE_TITLE, $env:FAULTLINE_BODY, [System.Windows.Forms.ToolTipIcon]::Warning)
+$deadline = (Get-Date).AddSeconds(12)
+while ((Get-Date) -lt $deadline) {
+  [System.Windows.Forms.Application]::DoEvents()
+  if ($clicked) { $n.Dispose(); exit 2 }
+  Start-Sleep -Milliseconds 200
+}
+$n.Dispose()
+exit 0
+`
+	cmd := exec.Command("powershell", "-NoProfile", "-STA", "-NonInteractive", "-Command", ps)
+	cmd.Env = append(os.Environ(), "FAULTLINE_TITLE="+title, "FAULTLINE_BODY="+body)
+	err := cmd.Run()
+	if err == nil {
+		return nil
+	}
+	if cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == 2 {
+		if onClick != nil {
+			onClick()
+		}
+		return nil
+	}
+	_ = strings.TrimSpace(title)
+	return nil
+}
 
 func flashTaskbar(sound bool) error {
 	hwnd := findAppWindow()

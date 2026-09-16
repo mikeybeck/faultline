@@ -528,7 +528,22 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 				Ready: func(addr string) {
 					e.mu.Lock()
 					e.boundIngest = addr
+					if e.notifier != nil {
+						e.notifier.ActivateBase = "http://" + addr
+					}
 					e.mu.Unlock()
+				},
+				OnActivate: func(hash string) {
+					ev, ok := e.store.Get(hash)
+					if !ok {
+						return
+					}
+					e.mu.Lock()
+					fn := e.onNotify
+					e.mu.Unlock()
+					if fn != nil {
+						fn(ev)
+					}
 				},
 			})
 		}()
@@ -540,6 +555,8 @@ func (e *Engine) Start(parent context.Context, cfg *config.Config, fromStart boo
 		e.wg.Add(1)
 		go e.watchGitHEAD(ctx, projectDir)
 	}
+	e.wg.Add(1)
+	go e.watchSnoozes(ctx)
 	return nil
 }
 
@@ -599,6 +616,7 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 	var lastEvent event.Event
 	dirty := false
 	backfillSeen := false
+	tails := newLineTails()
 
 	ping := func() {
 		if !dirty {
@@ -611,14 +629,23 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 		}
 	}
 
-	ingest := func(ev *event.Event, backfill bool) {
+	ingest := func(ev *event.Event, backfill bool, src string) {
 		if ev == nil {
 			return
 		}
 		e.mu.Lock()
 		maps := e.maps
+		cfg := e.cfg
 		e.mu.Unlock()
 		sourcemap.Apply(maps, ev, 0)
+		if cfg != nil && cfg.Ignores(*ev) {
+			return
+		}
+		if src != "" {
+			if ctxLines := tails.snapshot(src); len(ctxLines) > 0 {
+				ev.Context = ctxLines
+			}
+		}
 		db, project := e.persistState()
 		if db != nil && project != "" {
 			res, err := db.Record(project, *ev, backfill)
@@ -670,9 +697,9 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 	}
 
 	flushAll := func(backfill bool) {
-		for _, p := range parsers {
+		for name, p := range parsers {
 			for _, ev := range p.Flush() {
-				ingest(ev, backfill)
+				ingest(ev, backfill, name)
 			}
 		}
 	}
@@ -703,7 +730,7 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 				ping()
 				return
 			}
-			ingest(&ev, false)
+			ingest(&ev, false, "")
 		case line, ok := <-lineCh:
 			if !ok {
 				flushAll(false)
@@ -711,12 +738,13 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 				return
 			}
 			lastActivity = time.Now()
+			tails.add(line.Source, line.Line)
 			p := parsers[line.Source]
 			if p == nil {
 				continue
 			}
 			for _, ev := range p.Feed(line.Line) {
-				ingest(ev, line.Backfill)
+				ingest(ev, line.Backfill, line.Source)
 			}
 			if !line.Backfill && backfillSeen {
 				flushAll(false)
@@ -725,6 +753,80 @@ func (e *Engine) ingestLoop(ctx context.Context, parsers map[string]parser.Parse
 				ping()
 			}
 		}
+	}
+}
+
+const tailKeep = 24
+
+type lineTails struct {
+	by map[string][]string
+}
+
+func newLineTails() *lineTails {
+	return &lineTails{by: make(map[string][]string)}
+}
+
+func (t *lineTails) add(src, line string) {
+	if t == nil || src == "" {
+		return
+	}
+	line = strings.TrimRight(line, "\r")
+	if len(line) > 500 {
+		line = line[:500]
+	}
+	buf := append(t.by[src], line)
+	if len(buf) > tailKeep {
+		buf = buf[len(buf)-tailKeep:]
+	}
+	t.by[src] = buf
+}
+
+func (t *lineTails) snapshot(src string) []string {
+	if t == nil {
+		return nil
+	}
+	buf := t.by[src]
+	if len(buf) == 0 {
+		return nil
+	}
+	out := make([]string, len(buf))
+	copy(out, buf)
+	return out
+}
+
+func (e *Engine) watchSnoozes(ctx context.Context) {
+	defer e.wg.Done()
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			e.restoreSnoozes()
+		}
+	}
+}
+
+func (e *Engine) restoreSnoozes() {
+	db, project := e.persistState()
+	if db == nil || project == "" {
+		return
+	}
+	items, err := db.LoadActive(project)
+	if err != nil {
+		return
+	}
+	added := false
+	for _, ev := range items {
+		if _, ok := e.store.Get(ev.Hash); ok {
+			continue
+		}
+		e.store.Put(ev)
+		added = true
+	}
+	if added {
+		e.pingInbox()
 	}
 }
 

@@ -24,15 +24,26 @@ sources:
   #   path: npm run dev
   #   parser: generic   # generic | json | laravel | apache
 
-# inbox:
-#   followLatest: false
-#   clearOnCommit: true   # hide current errors when .git/HEAD changes
-
   # Browser errors via the unpacked extension in extension/
   # (also starts automatically on 127.0.0.1:9477 while watching)
   # - name: browser
   #   type: browser
   #   path: 127.0.0.1:9477
+
+# inbox:
+#   followLatest: false
+#   clearOnCommit: true   # hide current errors when .git/HEAD changes
+#   ignore:
+#     - type: DeprecationWarning
+#     - message: ECONNRESET
+#     - path: "**/node_modules/**"
+#     - source: vite
+#     - regex: "heartbeat"
+#   views:
+#     - name: Browser errors
+#       source: browser
+#       severity: error
+#       sort: recent
 
 # browser:
 #   extraHosts:

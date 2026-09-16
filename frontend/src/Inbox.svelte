@@ -10,6 +10,7 @@
   export let sourceFilter = ''
   export let sort = 'recent'
   export let followLatest = false
+  export let views = []
   export let statusMsg = ''
   export let marked = false
   export let helpOpen = false
@@ -33,6 +34,9 @@
   export let onSourceFilter = () => {}
   export let onSort
   export let onFollowLatest = () => {}
+  export let onApplyView = () => {}
+  export let onSaveView = () => {}
+  export let onDeleteView = () => {}
   export let onHelp = () => {}
 
   const ROW = 76
@@ -54,6 +58,8 @@
   $: commandOnly = sources.length > 0 && sources.every((s) => s.type === 'command')
   $: if (!selected) muteOpen = false
   $: if (dismissMenus) muteOpen = false
+  $: samples = ((selected && selected.samples) || []).filter((s) => s && s !== (selected && selected.message))
+  $: contextLines = (selected && selected.context) || []
   $: frames = (selected && selected.frames) || []
   $: if (selected && listEl) scrollSelected()
 
@@ -189,6 +195,21 @@
     title="Keep the newest error selected as it arrives"
     on:click={() => onFollowLatest(!followLatest)}
   >Follow latest</button>
+  <select class="select" on:change={(e) => { const n = e.target.value; if (n) onApplyView(views.find((v) => v.name === n)); e.target.selectedIndex = 0 }}>
+    <option value="">Views</option>
+    {#each views as v}
+      <option value={v.name}>{v.name}</option>
+    {/each}
+  </select>
+  <button class="btn" title="Save the current search, severity, source, and sort" on:click={onSaveView}>Save view</button>
+  {#if views.length}
+    <select class="select" on:change={(e) => { const n = e.target.value; if (n) onDeleteView(n); e.target.selectedIndex = 0 }}>
+      <option value="">Delete view</option>
+      {#each views as v}
+        <option value={v.name}>{v.name}</option>
+      {/each}
+    </select>
+  {/if}
   {#if narrowed}
     <button class="btn" title="Hide the errors currently listed until they happen again" on:click={onDismissMatching}>
       Dismiss matching{#if total} · {total}{/if}
@@ -268,6 +289,28 @@
         <h3>Message</h3>
         <div class="message">{selected.message || '—'}</div>
       </div>
+      {#if samples.length}
+        <div class="block">
+          <h3>Also seen</h3>
+          <div class="stack">
+            {#each samples as s}
+              <div>{s}</div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+      {#if selected.snippet}
+        <div class="block">
+          <h3>Source</h3>
+          <div class="stack">{selected.snippet}</div>
+        </div>
+      {/if}
+      {#if contextLines.length}
+        <div class="block">
+          <h3>Nearby log</h3>
+          <div class="stack">{contextLines.join('\n')}</div>
+        </div>
+      {/if}
       {#if frames.length}
         <div class="block">
           <h3>Stack</h3>

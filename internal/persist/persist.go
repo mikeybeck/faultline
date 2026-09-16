@@ -2,6 +2,7 @@ package persist
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -100,6 +101,9 @@ CREATE TABLE IF NOT EXISTS events (
   first_seen INTEGER NOT NULL,
   last_seen INTEGER NOT NULL,
   dismissed_at INTEGER,
+  snippet TEXT,
+  context TEXT,
+  samples TEXT,
   PRIMARY KEY (project, hash)
 );
 CREATE INDEX IF NOT EXISTS idx_events_project_seen ON events(project, last_seen);
@@ -114,6 +118,9 @@ CREATE TABLE IF NOT EXISTS mutes (
 		return fmt.Errorf("inbox db migrate: %w", err)
 	}
 	_, _ = d.sql.Exec(`ALTER TABLE events ADD COLUMN snoozed_until INTEGER`)
+	_, _ = d.sql.Exec(`ALTER TABLE events ADD COLUMN snippet TEXT`)
+	_, _ = d.sql.Exec(`ALTER TABLE events ADD COLUMN context TEXT`)
+	_, _ = d.sql.Exec(`ALTER TABLE events ADD COLUMN samples TEXT`)
 	return nil
 }
 
@@ -161,6 +168,7 @@ func (d *DB) Record(project string, ev event.Event, replay bool) (RecordResult, 
 		if ev.LastSeen.IsZero() {
 			ev.LastSeen = now
 		}
+		ev.Samples = event.PushSample(ev.Samples, ev.Message)
 		if err := d.insertLocked(project, ev, nil); err != nil {
 			return RecordResult{}, err
 		}
@@ -169,36 +177,10 @@ func (d *DB) Record(project string, ev event.Event, replay bool) (RecordResult, 
 
 	merged := existing.ev
 	if replay {
-		if ev.Stack != "" {
-			merged.Stack = ev.Stack
-		}
-		if ev.Raw != "" {
-			merged.Raw = ev.Raw
-		}
-		if merged.File == "" && ev.File != "" {
-			merged.File = ev.File
-			merged.Line = ev.Line
-		}
-		if now.After(merged.LastSeen) {
-			merged.LastSeen = now
-			merged.Time = now
-		}
+		mergePayload(&merged, ev, now, false)
 	} else {
 		merged.Count++
-		merged.LastSeen = now
-		if now.After(merged.Time) {
-			merged.Time = now
-		}
-		if ev.Stack != "" {
-			merged.Stack = ev.Stack
-		}
-		if ev.Raw != "" {
-			merged.Raw = ev.Raw
-		}
-		if merged.File == "" && ev.File != "" {
-			merged.File = ev.File
-			merged.Line = ev.Line
-		}
+		mergePayload(&merged, ev, now, true)
 	}
 
 	reappeared := false
@@ -231,7 +213,7 @@ func (d *DB) LoadActive(project string) ([]event.Event, error) {
 
 	rows, err := d.sql.Query(`
 SELECT e.hash, e.source, e.type, e.message, e.file, e.line, e.severity, e.stack, e.raw,
-       e.count, e.first_seen, e.last_seen
+       e.count, e.first_seen, e.last_seen, e.snippet, e.context, e.samples
 FROM events e
 WHERE e.project = ?
   AND e.dismissed_at IS NULL
@@ -453,7 +435,8 @@ func (d *DB) Mutes(project string) ([]Mute, error) {
 
 func (d *DB) getLocked(project, hash string) (*row, error) {
 	r := d.sql.QueryRow(`
-SELECT hash, source, type, message, file, line, severity, stack, raw, count, first_seen, last_seen, dismissed_at
+SELECT hash, source, type, message, file, line, severity, stack, raw, count, first_seen, last_seen,
+       snippet, context, samples, dismissed_at
 FROM events WHERE project = ? AND hash = ?`, project, hash)
 	ev, dismissed, err := scanStored(r)
 	if err == sql.ErrNoRows {
@@ -489,10 +472,11 @@ func (d *DB) insertLocked(project string, ev event.Event, dismissed *time.Time) 
 		dismissedMS = timeMS(*dismissed)
 	}
 	_, err := d.sql.Exec(`
-INSERT INTO events (project, hash, source, type, message, file, line, severity, stack, raw, count, first_seen, last_seen, dismissed_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO events (project, hash, source, type, message, file, line, severity, stack, raw, count, first_seen, last_seen, dismissed_at, snippet, context, samples)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		project, ev.Hash, ev.Source, ev.Type, ev.Message, ev.File, ev.Line, string(ev.Severity),
 		ev.Stack, ev.Raw, ev.Count, timeMS(ev.FirstSeen), timeMS(ev.LastSeen), dismissedMS,
+		nullString(ev.Snippet), marshalStrings(ev.Context), marshalStrings(ev.Samples),
 	)
 	if err != nil {
 		return fmt.Errorf("inbox insert: %w", err)
@@ -507,10 +491,11 @@ func (d *DB) updateLocked(project string, ev event.Event, dismissed *time.Time) 
 	}
 	_, err := d.sql.Exec(`
 UPDATE events SET source=?, type=?, message=?, file=?, line=?, severity=?, stack=?, raw=?,
-  count=?, first_seen=?, last_seen=?, dismissed_at=?
+  count=?, first_seen=?, last_seen=?, dismissed_at=?, snippet=?, context=?, samples=?
 WHERE project=? AND hash=?`,
 		ev.Source, ev.Type, ev.Message, ev.File, ev.Line, string(ev.Severity), ev.Stack, ev.Raw,
 		ev.Count, timeMS(ev.FirstSeen), timeMS(ev.LastSeen), dismissedMS,
+		nullString(ev.Snippet), marshalStrings(ev.Context), marshalStrings(ev.Samples),
 		project, ev.Hash,
 	)
 	if err != nil {
@@ -537,10 +522,10 @@ func scanCols(s scanner, withDismissed bool) (event.Event, sql.NullInt64, error)
 	var sev string
 	var first, last int64
 	var dismissed sql.NullInt64
-	var stack, raw sql.NullString
+	var stack, raw, snippet, contextJSON, samplesJSON sql.NullString
 	dest := []any{
 		&ev.Hash, &ev.Source, &ev.Type, &ev.Message, &ev.File, &ev.Line, &sev,
-		&stack, &raw, &ev.Count, &first, &last,
+		&stack, &raw, &ev.Count, &first, &last, &snippet, &contextJSON, &samplesJSON,
 	}
 	if withDismissed {
 		dest = append(dest, &dismissed)
@@ -555,10 +540,74 @@ func scanCols(s scanner, withDismissed bool) (event.Event, sql.NullInt64, error)
 	if raw.Valid {
 		ev.Raw = raw.String
 	}
+	if snippet.Valid {
+		ev.Snippet = snippet.String
+	}
+	ev.Context = unmarshalStrings(contextJSON)
+	ev.Samples = unmarshalStrings(samplesJSON)
 	ev.FirstSeen = msTime(first)
 	ev.LastSeen = msTime(last)
 	ev.Time = ev.LastSeen
 	return ev, dismissed, nil
+}
+
+func mergePayload(dst *event.Event, ev event.Event, now time.Time, live bool) {
+	if live {
+		dst.LastSeen = now
+		if now.After(dst.Time) {
+			dst.Time = now
+		}
+		dst.Message = ev.Message
+		dst.Samples = event.PushSample(dst.Samples, ev.Message)
+	} else if now.After(dst.LastSeen) {
+		dst.LastSeen = now
+		dst.Time = now
+	}
+	if ev.Stack != "" {
+		dst.Stack = ev.Stack
+	}
+	if ev.Raw != "" {
+		dst.Raw = ev.Raw
+	}
+	if ev.Snippet != "" {
+		dst.Snippet = ev.Snippet
+	}
+	if len(ev.Context) > 0 {
+		dst.Context = append([]string{}, ev.Context...)
+	}
+	if dst.File == "" && ev.File != "" {
+		dst.File = ev.File
+		dst.Line = ev.Line
+	}
+}
+
+func marshalStrings(v []string) any {
+	if len(v) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return string(b)
+}
+
+func unmarshalStrings(ns sql.NullString) []string {
+	if !ns.Valid || strings.TrimSpace(ns.String) == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(ns.String), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func nullString(s string) any {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return s
 }
 
 func normalize(ev *event.Event) {

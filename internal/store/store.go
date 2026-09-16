@@ -38,6 +38,7 @@ func (s *Store) Ingest(ev event.Event) Result {
 	if ev.Count == 0 {
 		ev.Count = 1
 	}
+	ev.Samples = event.PushSample(ev.Samples, ev.Message)
 	now := ev.Time
 	if now.IsZero() {
 		now = time.Now()
@@ -70,6 +71,14 @@ func (s *Store) Ingest(ev event.Event) Result {
 	if ev.Raw != "" {
 		existing.Raw = ev.Raw
 	}
+	if ev.Snippet != "" {
+		existing.Snippet = ev.Snippet
+	}
+	if len(ev.Context) > 0 {
+		existing.Context = append([]string{}, ev.Context...)
+	}
+	existing.Message = ev.Message
+	existing.Samples = event.PushSample(existing.Samples, ev.Message)
 	if existing.File == "" && ev.File != "" {
 		existing.File = ev.File
 		existing.Line = ev.Line
@@ -114,6 +123,9 @@ func (s *Store) Summaries(filter string) []event.Event {
 	for i := range items {
 		items[i].Stack = ""
 		items[i].Raw = ""
+		items[i].Snippet = ""
+		items[i].Context = nil
+		items[i].Samples = nil
 	}
 	return items
 }

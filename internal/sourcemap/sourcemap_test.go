@@ -1,6 +1,7 @@
 package sourcemap
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -126,5 +127,37 @@ func TestApplyRewritesEvent(t *testing.T) {
 	}
 	if !strings.Contains(ev.Stack, "ProjectForm.svelte:83") {
 		t.Fatalf("stack = %q", ev.Stack)
+	}
+}
+
+func TestInlineDataMapAndSourcesContent(t *testing.T) {
+	dir := t.TempDir()
+	src := "export function boom() {\n  throw new Error('x')\n}\n"
+	mappings := encodeVLQ(0) + encodeVLQ(0) + encodeVLQ(1) + encodeVLQ(0)
+	raw, _ := json.Marshal(map[string]any{
+		"version":        3,
+		"sources":        []string{"src/lib.ts"},
+		"sourcesContent": []string{src},
+		"mappings":       mappings,
+	})
+	b64 := base64.StdEncoding.EncodeToString(raw)
+	js := filepath.Join(dir, "bundle.js")
+	if err := os.WriteFile(js, []byte("//# sourceMappingURL=data:application/json;base64,"+b64+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := NewResolver(dir)
+	file, line, ok := r.Remap(js, 1, 0)
+	if !ok {
+		t.Fatal("remap failed")
+	}
+	if !strings.Contains(file, "lib.ts") {
+		t.Fatalf("file=%q", file)
+	}
+	if line != 2 {
+		t.Fatalf("line=%d", line)
+	}
+	sn := r.snippetFromGenerated(js, 1, 0)
+	if !strings.Contains(sn, "throw new Error") {
+		t.Fatalf("snippet=%q", sn)
 	}
 }

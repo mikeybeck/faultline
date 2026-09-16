@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mikey/faultline/internal/event"
 )
 
 func TestGenericParseSample(t *testing.T) {
@@ -106,6 +108,21 @@ func TestForTypeGeneric(t *testing.T) {
 	}
 	if _, ok := cp.(*Generic); !ok {
 		t.Fatalf("command parser %T", cp)
+	}
+}
+
+func TestGenericCapturesHTTPForbiddenBody(t *testing.T) {
+	p := NewGeneric("app")
+	p.Feed("403 Forbidden: Invalid sorting parameters.")
+	got := p.Flush()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 event, got %#v", got)
+	}
+	if got[0].Severity != event.SeverityError {
+		t.Fatalf("severity = %q", got[0].Severity)
+	}
+	if !strings.Contains(got[0].Message, "Invalid sorting parameters") {
+		t.Fatalf("message = %q", got[0].Message)
 	}
 }
 

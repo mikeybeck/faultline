@@ -37,7 +37,7 @@ go install ./cmd/faultline
 go build -o faultline ./cmd/faultline
 ```
 
-Requires Go 1.22+. On Linux, desktop notifications use `notify-send` (libnotify).
+Requires Go 1.22+ (`go.mod` may pin a newer toolchain). On Linux, desktop notifications use `notify-send` (libnotify); click the notification to focus Faultline and open the file.
 
 ## Quick start (desktop)
 
@@ -78,7 +78,7 @@ faultline --tui --config ./faultline.yaml --tail
 | `s` | Toggle sort by frequency |
 | `q` | Quit |
 
-Desktop shortcuts (inbox): `/` search, `j`/`k` or arrows move, `Enter` focus detail, `o` open, `d` dismiss, `c` mark clean, `s` sort, `?` help.
+Desktop shortcuts (inbox): `/` search, `j`/`k` or arrows move, `Enter` focus detail, `o` open, `d` dismiss, `z` snooze 15 minutes, `c` mark clean, `s` sort, `?` help.
 
 ## Browser errors
 
@@ -89,7 +89,7 @@ Load it unpacked. From a GitHub release, unzip `faultline-extension.zip` first.
 - **Chrome / Edge / Chromium:** `chrome://extensions` → Developer mode → Load unpacked → select the `faultline-extension` folder
 - **Firefox 128+:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `manifest.json` in that folder
 
-It injects into local origins (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.ddev.site`, `*.lndo.site`). Custom names such as `localphishingbox.com` are not included by default — add them under **Settings → Extra browser hosts** (Faultline serves them at `http://127.0.0.1:9477/hosts`) or the extension’s **Options**. Uncaught errors, unhandled promise rejections, and errors a framework swallows then prints with `console.error` (Vue `v-on` handlers, for example) are sent to Faultline; if Faultline is not running the requests fail silently.
+It injects into local origins (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.ddev.site`, `*.lndo.site`). Custom names such as `localphishingbox.com` are not included by default — add them under **Settings → Extra browser hosts** (Faultline serves them at `http://127.0.0.1:9477/hosts`) or the extension’s **Options**. Uncaught errors, unhandled promise rejections, errors a framework swallows then prints with `console.error` (Vue `v-on` handlers, for example), and failed `fetch` responses (other than 404) are sent to Faultline; if Faultline is not running the requests fail silently.
 
 A `browser` source in `faultline.yaml` is optional (custom listen address, or a browser-only project with no log files):
 
@@ -107,13 +107,17 @@ browser:
 
 | Capability | Details |
 |---|---|
-| Sources | Log files (`generic`, `json`, Laravel, Apache), command stdout/stderr, and browser errors via the extension |
+| Sources | Log files (`generic`, `json`, Laravel, Apache), command stdout/stderr (for example `npm run dev` or `docker compose logs -f`), and browser errors via the extension |
 | Structured events | type, message, file, line, severity, stack, counts |
-| Dedup | fingerprints group repeats (`×N`, first/last seen) |
-| Desktop UI | source health, split inbox + detail, filter, severity, sort, clickable stacks |
-| Notifications | desktop alert on **new** fingerprints only |
+| Dedup | fingerprints group repeats (`×N`, first/last seen); IDs, quotes, and long numbers are stripped so one bug stays one row |
+| Persistence | SQLite inbox at `~/.config/faultline/inbox.db` (or the OS equivalent) so groups, mutes, and snoozes survive restarts |
+| Desktop UI | source health, split inbox + detail, search, severity, source filter, sort, follow-latest, saved views, clickable stacks, nearby log lines, source snippet |
+| Triage | dismiss until it happens again, mute this fingerprint or type (unmute in Settings), snooze 15m / 1h, checked-in ignore rules, mark inbox clean, optional clear on git HEAD change |
+| Sourcemaps | remaps generated JS `file:line` (and stack frames) using sibling `.map` files, inline `data:` maps, or loopback HTTP maps; original snippet when `sourcesContent` or the project file is available |
+| Notifications | desktop alert on **new** fingerprints only; click opens Faultline and the editor (Linux; macOS with `terminal-notifier`; Windows balloon) |
 | Editor | opens VS Code / Cursor / PhpStorm / custom command at file:line |
-| Browser | unpacked extension posts `window.onerror` / `unhandledrejection` / `console.error(Error)` to `127.0.0.1:9477` |
+| Browser | unpacked extension posts uncaught errors, `unhandledrejection`, some `console.error(Error)`, failed `fetch`, and failed XHR to `127.0.0.1:9477` |
+| Self-diagnostics | Faultline’s own errors go to `faultline.log` next to app config and show in the inbox as source `faultline` |
 
 ## Log formats
 
@@ -164,6 +168,35 @@ editor:
 ```
 
 Templates may include `{file}` and `{line}`.
+
+## Inbox
+
+Settings live in `faultline.yaml` under `inbox:`:
+
+```yaml
+inbox:
+  followLatest: false   # always select the newest error as it arrives
+  clearOnCommit: true   # hide current errors when .git/HEAD changes
+  ignore:
+    - type: DeprecationWarning
+    - message: ECONNRESET
+    - path: "**/node_modules/**"
+    - regex: "heartbeat"
+  views:
+    - name: Browser
+      source: browser
+      severity: error
+```
+
+Ignore rules are checked in. Within a rule every set field must match; any matching rule drops the event. **Save and restart** in Settings applies ignore changes.
+
+**Saved views** remember search, severity, source, and sort. Apply or save them from the inbox toolbar.
+
+**Mark clean** dismisses what is on screen and stores log resume offsets so the next launch skips those lines. **Replay logs** forgets file offsets and re-reads log files; browser events stay.
+
+**Dismiss** hides a fingerprint until it occurs again. **Snooze** hides it for 15 minutes or an hour even if it repeats (it returns when the timer ends). **Mute** never shows that fingerprint (or event type) until you unmute it in Settings.
+
+Fingerprints treat UUIDs, long hex, quoted strings, and long numbers as interchangeable so the same bug does not split into hundreds of rows. Distinct messages for a group show under **Also seen**. Nearby log lines and a source snippet appear in the detail pane when available.
 
 ## Demo with sample logs
 
@@ -220,5 +253,5 @@ NOTES='Bug fixes.' ./build.sh release v0.1.0
 
 ## Roadmap ideas
 
-- Clickable notification → editor (platform-specific)
-- Sound themes and saved views
+- Sound themes
+- Test-runner parsers and git blame on the selected frame

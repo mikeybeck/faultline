@@ -47,6 +47,8 @@
   let followLatest = false
   let clearOnCommit = false
   let extraHostsText = ''
+  let ignoreText = ''
+  let views = []
   let error = ''
   let busy = false
   let settingsOpen = false
@@ -116,12 +118,50 @@
       .filter((s) => s && !s.startsWith('#'))
   }
 
+  function ignoreFromText(text) {
+    return String(text || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((s) => s && !s.startsWith('#'))
+      .map((line) => {
+        const i = line.indexOf(':')
+        if (i < 0) return { message: line }
+        const k = line.slice(0, i).trim().toLowerCase()
+        const v = line.slice(i + 1).trim()
+        if (k === 'type') return { type: v }
+        if (k === 'message') return { message: v }
+        if (k === 'path') return { path: v }
+        if (k === 'source') return { source: v }
+        if (k === 'regex') return { regex: v }
+        return { message: line }
+      })
+  }
+
+  function ignoreToText(rules) {
+    return (rules || [])
+      .map((r) => {
+        if (r.type) return 'type: ' + r.type
+        if (r.message) return 'message: ' + r.message
+        if (r.path) return 'path: ' + r.path
+        if (r.source) return 'source: ' + r.source
+        if (r.regex) return 'regex: ' + r.regex
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
   function cfgFromForm() {
     return {
       sources: sources.map((s) => ({ name: s.name, type: s.type, path: s.path, parser: s.parser || '' })),
       notifications: { enabled: notifications, sound },
       editor: { command: editorCommand },
-      inbox: { followLatest, clearOnCommit },
+      inbox: {
+        followLatest,
+        clearOnCommit,
+        ignore: ignoreFromText(ignoreText),
+        views: (views || []).map((v) => ({ ...v })),
+      },
       browser: { extraHosts: hostsFromText(extraHostsText) },
     }
   }
@@ -135,6 +175,8 @@
     followLatest = !!(cfg.inbox && cfg.inbox.followLatest)
     clearOnCommit = !!(cfg.inbox && cfg.inbox.clearOnCommit)
     extraHostsText = ((cfg.browser && cfg.browser.extraHosts) || []).join('\n')
+    ignoreText = ignoreToText(cfg.inbox && cfg.inbox.ignore)
+    views = ((cfg.inbox && cfg.inbox.views) || []).map((v) => ({ ...v }))
     if (!['code', 'cursor', 'phpstorm'].includes(editorCommand)) {
       customEditor = editorCommand
     }
@@ -481,6 +523,46 @@
     editorCommand = path
   }
 
+  async function applyView(v) {
+    if (!v) return
+    filter = v.filter || ''
+    severity = v.severity || 'all'
+    sourceFilter = v.source || ''
+    sort = v.sort || 'recent'
+    scheduleRefresh()
+  }
+
+  async function saveCurrentView() {
+    const name = window.prompt('Name this view')
+    if (!name || !name.trim()) return
+    const next = {
+      name: name.trim(),
+      filter,
+      severity,
+      source: sourceFilter,
+      sort,
+    }
+    views = [...(views || []).filter((v) => v.name !== next.name), next]
+    if (!projectDir) return
+    try {
+      await SaveProjectConfig(cfgFromForm())
+      toast('Saved view')
+    } catch (e) {
+      toast(String(e))
+    }
+  }
+
+  async function deleteView(name) {
+    views = (views || []).filter((v) => v.name !== name)
+    if (!projectDir) return
+    try {
+      await SaveProjectConfig(cfgFromForm())
+      toast('Removed view')
+    } catch (e) {
+      toast(String(e))
+    }
+  }
+
   async function setFollowLatest(v) {
     followLatest = !!v
     if (followLatest && events.length) {
@@ -705,6 +787,8 @@
     mutes = []
     followLatest = false
     extraHostsText = ''
+    ignoreText = ''
+    views = []
     scannedEmpty = false
     await loadRecent()
   }
@@ -753,6 +837,7 @@
       {sourceFilter}
       {sort}
       {followLatest}
+      {views}
       {statusMsg}
       marked={marked}
       {helpOpen}
@@ -776,6 +861,9 @@
       onSourceFilter={(v) => { sourceFilter = v; scheduleRefresh() }}
       onSort={(v) => { sort = v; scheduleRefresh() }}
       onFollowLatest={setFollowLatest}
+      onApplyView={applyView}
+      onSaveView={saveCurrentView}
+      onDeleteView={deleteView}
       onHelp={() => (helpOpen = !helpOpen)}
     />
   {/if}
@@ -795,6 +883,7 @@
           {editorCommand}
           {customEditor}
           {extraHostsText}
+          {ignoreText}
           {mutes}
           {recent}
           {logPath}
@@ -816,6 +905,7 @@
           {onSourceChange}
           onBrowseEditor={browseEditor}
           onExtraHosts={(v) => (extraHostsText = v)}
+          onIgnore={(v) => (ignoreText = v)}
           onUnmute={doUnmute}
           onOpenRecent={openRecentProject}
           onNewProject={startFresh}

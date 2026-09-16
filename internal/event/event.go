@@ -4,9 +4,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
+
+const maxSamples = 5
 
 // Severity ranks relative importance of an event.
 type Severity string
@@ -29,11 +32,21 @@ type Event struct {
 	Severity  Severity  `json:"severity"`
 	Stack     string    `json:"stack"`
 	Raw       string    `json:"raw"`
+	Snippet   string    `json:"snippet,omitempty"`
+	Context   []string  `json:"context,omitempty"`
+	Samples   []string  `json:"samples,omitempty"`
 	Hash      string    `json:"hash"`
 	Count     int       `json:"count"`
 	FirstSeen time.Time `json:"firstSeen"`
 	LastSeen  time.Time `json:"lastSeen"`
 }
+
+var (
+	uuidRe   = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
+	hexRe    = regexp.MustCompile(`(?i)\b[0-9a-f]{16,}\b`)
+	quotedRe = regexp.MustCompile(`'[^']{1,240}'|"[^"]{1,240}"`)
+	numRe    = regexp.MustCompile(`\b\d{3,}\b`)
+)
 
 // Location returns "file:line" when available.
 func (e Event) Location() string {
@@ -75,9 +88,30 @@ func Fingerprint(source, typ, message, file string, line int) string {
 
 func normalizeMessage(msg string) string {
 	msg = strings.ToLower(strings.TrimSpace(msg))
-	// Collapse runs of whitespace.
+	msg = uuidRe.ReplaceAllString(msg, "#id")
+	msg = hexRe.ReplaceAllString(msg, "#hex")
+	msg = quotedRe.ReplaceAllString(msg, "#str")
+	msg = numRe.ReplaceAllString(msg, "#n")
 	fields := strings.Fields(msg)
 	return strings.Join(fields, " ")
+}
+
+// PushSample appends a distinct message, keeping the most recent few.
+func PushSample(samples []string, msg string) []string {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return samples
+	}
+	for _, s := range samples {
+		if s == msg {
+			return samples
+		}
+	}
+	out := append(append([]string{}, samples...), msg)
+	if len(out) > maxSamples {
+		out = out[len(out)-maxSamples:]
+	}
+	return out
 }
 
 func truncate(s string, n int) string {

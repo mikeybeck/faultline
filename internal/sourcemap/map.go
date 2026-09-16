@@ -7,9 +7,10 @@ import (
 
 // Map is a decoded v3 source map.
 type Map struct {
-	File    string
-	Sources []string
-	lines   [][]segment
+	File     string
+	Sources  []string
+	Contents []string
+	lines    [][]segment
 }
 
 type segment struct {
@@ -21,9 +22,10 @@ type segment struct {
 }
 
 type rawMap struct {
-	File     string   `json:"file"`
-	Sources  []string `json:"sources"`
-	Mappings string   `json:"mappings"`
+	File           string   `json:"file"`
+	Sources        []string `json:"sources"`
+	SourcesContent []string `json:"sourcesContent"`
+	Mappings       string   `json:"mappings"`
 }
 
 // Parse decodes a source map JSON document.
@@ -32,9 +34,23 @@ func Parse(data []byte) (*Map, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	m := &Map{File: raw.File, Sources: raw.Sources}
+	m := &Map{File: raw.File, Sources: raw.Sources, Contents: raw.SourcesContent}
 	m.lines = parseMappings(raw.Mappings)
 	return m, nil
+}
+
+func (m *Map) contentFor(file string) string {
+	if m == nil || file == "" {
+		return ""
+	}
+	for i, s := range m.Sources {
+		if s == file || strings.HasSuffix(strings.ReplaceAll(file, "\\", "/"), strings.TrimPrefix(strings.ReplaceAll(s, "\\", "/"), "./")) {
+			if i < len(m.Contents) {
+				return m.Contents[i]
+			}
+		}
+	}
+	return ""
 }
 
 // Lookup maps a 1-based generated line/column onto original source location.
