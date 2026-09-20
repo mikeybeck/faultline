@@ -12,37 +12,17 @@ export namespace config {
 	        this.extraHosts = source["extraHosts"];
 	    }
 	}
-	export class IgnoreRule {
-	    type: string;
-	    message: string;
-	    path: string;
-	    source: string;
-	    regex: string;
-
-	    static createFrom(source: any = {}) {
-	        return new IgnoreRule(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.type = source["type"];
-	        this.message = source["message"];
-	        this.path = source["path"];
-	        this.source = source["source"];
-	        this.regex = source["regex"];
-	    }
-	}
 	export class SavedView {
 	    name: string;
-	    filter: string;
-	    severity: string;
-	    source: string;
-	    sort: string;
-
+	    filter?: string;
+	    severity?: string;
+	    source?: string;
+	    sort?: string;
+	
 	    static createFrom(source: any = {}) {
 	        return new SavedView(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -52,16 +32,36 @@ export namespace config {
 	        this.sort = source["sort"];
 	    }
 	}
+	export class IgnoreRule {
+	    type?: string;
+	    message?: string;
+	    path?: string;
+	    source?: string;
+	    regex?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IgnoreRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.message = source["message"];
+	        this.path = source["path"];
+	        this.source = source["source"];
+	        this.regex = source["regex"];
+	    }
+	}
 	export class InboxConfig {
 	    followLatest: boolean;
 	    clearOnCommit: boolean;
-	    ignore: IgnoreRule[];
-	    views: SavedView[];
-
+	    ignore?: IgnoreRule[];
+	    views?: SavedView[];
+	
 	    static createFrom(source: any = {}) {
 	        return new InboxConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.followLatest = source["followLatest"];
@@ -69,22 +69,24 @@ export namespace config {
 	        this.ignore = this.convertValues(source["ignore"], IgnoreRule);
 	        this.views = this.convertValues(source["views"], SavedView);
 	    }
-
-	    convertValues(a: any, classs: any, asMap: boolean = false): any {
-	        if (!a) return a;
-	        if (a.slice && a.map) {
-	            return (a as any[]).map(elem => this.convertValues(elem, classs));
-	        } else if ("object" === typeof a) {
-	            if (asMap) {
-	                for (const key of Object.keys(a)) {
-	                    a[key] = new classs(a[key]);
-	                }
-	                return a;
-	            }
-	            return new classs(a);
-	        }
-	        return a;
-	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class EditorConfig {
 	    command: string;
@@ -171,6 +173,8 @@ export namespace config {
 	
 	
 	
+	
+	
 
 }
 
@@ -228,6 +232,9 @@ export namespace main {
 	    severity: string;
 	    stack: string;
 	    raw: string;
+	    snippet: string;
+	    context: string[];
+	    samples: string[];
 	    hash: string;
 	    count: number;
 	    firstSeen: string;
@@ -251,6 +258,9 @@ export namespace main {
 	        this.severity = source["severity"];
 	        this.stack = source["stack"];
 	        this.raw = source["raw"];
+	        this.snippet = source["snippet"];
+	        this.context = source["context"];
+	        this.samples = source["samples"];
 	        this.hash = source["hash"];
 	        this.count = source["count"];
 	        this.firstSeen = source["firstSeen"];

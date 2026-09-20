@@ -190,6 +190,20 @@
     }, null)
   }
 
+  function mergeEvent(detail, summary) {
+    return {
+      ...detail,
+      ...summary,
+      stack: detail.stack,
+      raw: detail.raw,
+      message: detail.message || summary.message,
+      frames: detail.frames,
+      context: detail.context,
+      snippet: detail.snippet,
+      samples: detail.samples,
+    }
+  }
+
   async function refresh() {
     try {
       const st = await GetState(filter, sort, severity, sourceFilter)
@@ -204,26 +218,12 @@
         if (latest && (!selected || selected.hash !== latest.hash)) {
           await selectEvent(latest)
         } else if (latest && selected) {
-          selected = {
-            ...selected,
-            ...latest,
-            stack: selected.stack,
-            raw: selected.raw,
-            message: selected.message || latest.message,
-            frames: selected.frames,
-          }
+          selected = mergeEvent(selected, latest)
         }
       } else if (selected) {
         const next = events.find((e) => e.hash === selected.hash)
         if (next) {
-          selected = {
-            ...selected,
-            ...next,
-            stack: selected.stack,
-            raw: selected.raw,
-            message: selected.message || next.message,
-            frames: selected.frames,
-          }
+          selected = mergeEvent(selected, next)
         } else {
           selected = null
         }

@@ -62,6 +62,10 @@ $n.Dispose()
 exit 0
 `
 	cmd := exec.Command("powershell", "-NoProfile", "-STA", "-NonInteractive", "-Command", ps)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+	}
 	cmd.Env = append(os.Environ(), "FAULTLINE_TITLE="+title, "FAULTLINE_BODY="+body)
 	err := cmd.Run()
 	if err == nil {

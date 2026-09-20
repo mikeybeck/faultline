@@ -49,6 +49,7 @@ func (c *Command) Run(ctx context.Context, out chan<- LineEvent) error {
 		cmd = exec.CommandContext(ctx, "sh", "-c", cmdline)
 	}
 	cmd.Dir = c.Dir
+	hideConsole(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
