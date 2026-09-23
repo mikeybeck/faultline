@@ -16,6 +16,7 @@
   export let helpOpen = false
   export let ingestAddr = ''
   export let dismissMenus = 0
+  export let version = ''
   export let onSelect
   export let onOpen
   export let onOpenPath = () => {}
@@ -150,6 +151,7 @@
 <div class="top">
   <div class="brand">
     <h1>Faultline</h1>
+    {#if version}<span class="ver">{version}</span>{/if}
     <span>inbox{#if total} · {total}{/if}</span>
   </div>
   <div class="pills">

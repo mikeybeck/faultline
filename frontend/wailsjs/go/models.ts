@@ -342,6 +342,7 @@ export namespace main {
 	    ingestAddr: string;
 	    extDir: string;
 	    extZipURL: string;
+	    version: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Bootstrap(source);
@@ -360,6 +361,7 @@ export namespace main {
 	        this.ingestAddr = source["ingestAddr"];
 	        this.extDir = source["extDir"];
 	        this.extZipURL = source["extZipURL"];
+	        this.version = source["version"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

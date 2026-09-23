@@ -23,6 +23,7 @@ import (
 	"github.com/mikey/faultline/internal/persist"
 	"github.com/mikey/faultline/internal/source"
 	"github.com/mikey/faultline/internal/statefile"
+	"github.com/mikey/faultline/internal/version"
 )
 
 // App is the Wails backend for the desktop UI.
@@ -142,6 +143,7 @@ type Bootstrap struct {
 	IngestAddr string              `json:"ingestAddr"`
 	ExtDir     string              `json:"extDir"`
 	ExtZipURL  string              `json:"extZipURL"`
+	Version    string              `json:"version"`
 }
 
 func (a *App) Bootstrap() Bootstrap {
@@ -162,6 +164,7 @@ func (a *App) Bootstrap() Bootstrap {
 		IngestAddr: a.eng.BoundIngest(),
 		ExtDir:     a.extDir,
 		ExtZipURL:  extdist.JoinURL(a.eng.BoundIngest()),
+		Version:    version.Version,
 	}
 }
 

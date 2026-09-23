@@ -73,6 +73,7 @@
   let marked = false
   let mutes = []
   let logPath = ''
+  let appVersion = ''
   let refreshTimer
   let refreshBusy = false
   let refreshQueued = false
@@ -297,6 +298,7 @@
       ingestAddr = b.ingestAddr || ''
       extDir = b.extDir || ''
       extZipURL = b.extZipURL || ''
+      appVersion = b.version || ''
       if (b.config) applyConfig(b.config)
       else {
         const d = await DefaultConfig()
@@ -822,6 +824,7 @@
       onOpenRecent={openRecentProject}
       {extDir}
       {extZipURL}
+      version={appVersion}
       onRevealExtension={revealExtension}
       onCopyExtensionPath={copyExtensionPath}
     />
@@ -843,6 +846,7 @@
       {helpOpen}
       {ingestAddr}
       {dismissMenus}
+      version={appVersion}
       onSelect={selectEvent}
       onOpen={doOpen}
       onOpenPath={doOpenPath}
@@ -894,6 +898,7 @@
           bind:clearOnCommit
           {extDir}
           {extZipURL}
+          version={appVersion}
           {error}
           {busy}
           onOpenFolder={openFolder}

@@ -74,6 +74,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   font-weight: 650;
 }
 .brand span { color: var(--muted); font-size: 12px; }
+.ver { color: var(--muted); font-size: 12px; font-weight: 450; letter-spacing: 0; }
+.ver-note { margin: 14px 0 0; }
 
 .pills { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
 .pill {

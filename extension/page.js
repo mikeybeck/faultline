@@ -258,27 +258,10 @@
     return appErrorFromValue(data)
   }
 
+  // Read a clone with text(). Canceling the clone's reader aborts the original
+  // body in Chromium, so the page's own res.json() / res.text() never settles.
   function readCappedText(res, max) {
-    const clone = res.clone()
-    const body = clone.body
-    if (!body || typeof body.getReader !== 'function') {
-      return clone.text().then((t) => String(t || '').slice(0, max))
-    }
-    const reader = body.getReader()
-    const dec = new TextDecoder()
-    let out = ''
-    const pump = () =>
-      reader.read().then(({ done, value }) => {
-        if (value) out += dec.decode(value, { stream: !done })
-        if (done || out.length >= max) {
-          try {
-            reader.cancel()
-          } catch (_) {}
-          return out.slice(0, max)
-        }
-        return pump()
-      })
-    return pump()
+    return res.clone().text().then((t) => String(t || '').slice(0, max))
   }
 
   const origFetch = window.fetch

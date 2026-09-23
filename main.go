@@ -16,6 +16,7 @@ import (
 
 	"github.com/mikey/faultline/internal/app"
 	"github.com/mikey/faultline/internal/config"
+	"github.com/mikey/faultline/internal/version"
 )
 
 //go:embed all:frontend/dist
@@ -49,7 +50,7 @@ func main() {
 	gui := NewApp(*configPath, ingestFromStart)
 	gui.InstallExtension(extensionFS)
 	err := wails.Run(&options.App{
-		Title:     "Faultline",
+		Title:     "Faultline " + version.Version,
 		Width:     1200,
 		Height:    800,
 		MinWidth:  860,

@@ -36,6 +36,7 @@
   export let logPath = ''
   export let extDir = ''
   export let extZipURL = ''
+  export let version = ''
 
   function projectName(p) {
     if (!p) return ''
@@ -145,4 +146,7 @@
     <button class="btn" on:click={onNewProject}>New project</button>
     <button class="btn ghost" on:click={onClose}>Close</button>
   </div>
+  {#if version}
+    <p class="hint ver-note">Faultline {version}</p>
+  {/if}
 </div>

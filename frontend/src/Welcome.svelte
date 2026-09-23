@@ -25,6 +25,7 @@
   export let onOpenRecent = () => {}
   export let extDir = ''
   export let extZipURL = ''
+  export let version = ''
   export let onRevealExtension = () => {}
   export let onCopyExtensionPath = () => {}
 
@@ -38,7 +39,7 @@
 
 <div class="welcome">
   <div class="card">
-    <h1>Faultline</h1>
+    <h1>Faultline{#if version} <span class="ver">{version}</span>{/if}</h1>
     <p class="lede">Watch any log file or command. Group repeats. Jump to the line in your editor. Browser errors arrive through the extension — nothing to add to your app.</p>
 
     {#if error}

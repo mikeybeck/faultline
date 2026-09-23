@@ -29,6 +29,23 @@ windows_cc() {
   fi
 }
 
+app_version() {
+  if [[ -n "${VERSION:-}" ]]; then
+    printf '%s' "$VERSION"
+    return
+  fi
+  local described
+  described="$(git describe --tags --always 2>/dev/null || true)"
+  if [[ -z "$described" ]]; then
+    described="dev"
+  fi
+  printf '%s' "$described"
+}
+
+version_ldflags() {
+  printf -- '-X github.com/mikey/faultline/internal/version.Version=%s' "$(app_version)"
+}
+
 build_desktop() {
   local tags="${TAGS:-}"
   if [[ "$(uname -s)" == "Linux" && -z "$tags" ]]; then
@@ -36,9 +53,9 @@ build_desktop() {
   fi
   echo "Building desktop app${tags:+ (tags: $tags)}…"
   if [[ -n "$tags" ]]; then
-    wails build -tags "$tags" "$@"
+    wails build -ldflags "$(version_ldflags)" -tags "$tags" "$@"
   else
-    wails build "$@"
+    wails build -ldflags "$(version_ldflags)" "$@"
   fi
   echo "→ build/bin/faultline"
 }
@@ -46,19 +63,21 @@ build_desktop() {
 build_windows() {
   windows_cc
   echo "Building Windows desktop app…"
-  wails build -platform windows/amd64 "$@"
+  wails build -ldflags "$(version_ldflags)" -platform windows/amd64 "$@"
   echo "→ build/bin/faultline.exe"
 }
 
 build_tui() {
+  local ldflags
+  ldflags="$(version_ldflags)"
   if [[ "${1:-}" == "windows" ]]; then
     shift || true
     echo "Building Windows TUI binary…"
-    GOOS=windows GOARCH=amd64 go build -o build/bin/faultline.exe ./cmd/faultline "$@"
+    GOOS=windows GOARCH=amd64 go build -ldflags "$ldflags" -o build/bin/faultline.exe ./cmd/faultline "$@"
     echo "→ build/bin/faultline.exe"
   else
     echo "Building TUI-only binary…"
-    go build -o build/bin/faultline ./cmd/faultline "$@"
+    go build -ldflags "$ldflags" -o build/bin/faultline ./cmd/faultline "$@"
     echo "→ build/bin/faultline"
   fi
 }
@@ -122,6 +141,7 @@ publish_release() {
   rm -rf "$stage"
   mkdir -p "$stage"
 
+  export VERSION="$ver"
   build_desktop
   if [[ ! -f build/bin/faultline ]]; then
     echo "expected build/bin/faultline" >&2
