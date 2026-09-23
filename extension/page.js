@@ -186,41 +186,134 @@
   hookConsole('error', 'error')
   hookConsole('warn', 'warning')
 
+  const BODY_CAP = 65536
+
+  function ignoredURL(url) {
+    return url.includes('127.0.0.1:9477') || url.includes('localhost:9477')
+  }
+
+  function reportNet(type, status, statusText, url, extra, severity) {
+    const line = (status || 0) + ' ' + (statusText || '') + ' ' + url
+    send({
+      type,
+      message: extra ? line + '\n' + extra : line,
+      file: location.href,
+      line: 0,
+      column: 0,
+      stack: '',
+      url: location.href,
+      severity,
+    })
+  }
+
+  // Skip bodies that cannot be a JSON object. text/* is included so a JSON
+  // payload served as text/plain or text/html is still inspected.
+  function shouldPeek(contentType) {
+    const ct = String(contentType || '').toLowerCase()
+    if (!ct || ct.includes('json') || ct.startsWith('text/')) return true
+    if (/^(image|audio|video|font)\//.test(ct)) return false
+    if (
+      ct.includes('javascript') ||
+      ct.includes('ecmascript') ||
+      ct.includes('wasm') ||
+      ct.includes('octet-stream') ||
+      ct.includes('pdf')
+    ) {
+      return false
+    }
+    return true
+  }
+
+  function errorText(data) {
+    const err = data.error
+    if (typeof err === 'string' && err.trim()) return err.trim()
+    if (
+      err &&
+      typeof err === 'object' &&
+      !Array.isArray(err) &&
+      typeof err.message === 'string' &&
+      err.message.trim()
+    ) {
+      return err.message.trim()
+    }
+    if (typeof data.message === 'string' && data.message.trim()) return data.message.trim()
+    return ''
+  }
+
+  function appErrorFromValue(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
+    if (data.success !== false) return ''
+    return errorText(data).slice(0, 500)
+  }
+
+  function appFailureMessage(text) {
+    const capped = String(text || '').slice(0, BODY_CAP)
+    if (!capped.trimStart().startsWith('{')) return ''
+    let data
+    try {
+      data = JSON.parse(capped)
+    } catch (_) {
+      return ''
+    }
+    return appErrorFromValue(data)
+  }
+
+  function readCappedText(res, max) {
+    const clone = res.clone()
+    const body = clone.body
+    if (!body || typeof body.getReader !== 'function') {
+      return clone.text().then((t) => String(t || '').slice(0, max))
+    }
+    const reader = body.getReader()
+    const dec = new TextDecoder()
+    let out = ''
+    const pump = () =>
+      reader.read().then(({ done, value }) => {
+        if (value) out += dec.decode(value, { stream: !done })
+        if (done || out.length >= max) {
+          try {
+            reader.cancel()
+          } catch (_) {}
+          return out.slice(0, max)
+        }
+        return pump()
+      })
+    return pump()
+  }
+
   const origFetch = window.fetch
   if (typeof origFetch === 'function') {
     window.fetch = function (...args) {
       return origFetch.apply(this, args).then((res) => {
         try {
           const url = String((res && res.url) || '')
-          if (
-            res &&
-            !res.ok &&
-            res.status !== 404 &&
-            !url.includes('127.0.0.1:9477') &&
-            !url.includes('localhost:9477')
-          ) {
-            const status = (res.status || 0) + ' ' + (res.statusText || '') + ' ' + url
+          if (!res || ignoredURL(url)) return res
+          if (!res.ok && res.status !== 404) {
             const sendFail = (extra) => {
-              send({
-                type: 'FailedFetch',
-                message: extra ? status + '\n' + extra : status,
-                file: location.href,
-                line: 0,
-                column: 0,
-                stack: '',
-                url: location.href,
-                severity: res.status >= 500 ? 'error' : 'warning',
-              })
+              reportNet(
+                'FailedFetch',
+                res.status,
+                res.statusText,
+                url,
+                extra,
+                res.status >= 500 ? 'error' : 'warning'
+              )
             }
             try {
-              res
-                .clone()
-                .text()
-                .then((t) => sendFail(String(t || '').slice(0, 500)))
+              readCappedText(res, 500)
+                .then((t) => sendFail(t))
                 .catch(() => sendFail(''))
             } catch (_) {
               sendFail('')
             }
+          } else if (res.ok && shouldPeek(res.headers && res.headers.get('content-type'))) {
+            readCappedText(res, BODY_CAP)
+              .then((t) => {
+                const err = appFailureMessage(t)
+                if (!err) return
+                reportNet('FailedFetch', res.status, res.statusText, url, err, 'warning')
+              })
+              .catch(() => {})
           }
         } catch (_) {}
         return res
@@ -235,23 +328,26 @@
       xhr.addEventListener('loadend', () => {
         try {
           const url = String(xhr.responseURL || '')
-          if (
-            xhr.status >= 400 &&
-            xhr.status !== 404 &&
-            !url.includes('127.0.0.1:9477') &&
-            !url.includes('localhost:9477')
-          ) {
+          if (ignoredURL(url)) return
+          if (xhr.status >= 400 && xhr.status !== 404) {
             const extra = xhrBody(xhr)
-            send({
-              type: 'FailedXHR',
-              message: xhr.status + ' ' + (xhr.statusText || '') + ' ' + url + (extra ? '\n' + extra : ''),
-              file: location.href,
-              line: 0,
-              column: 0,
-              stack: '',
-              url: location.href,
-              severity: xhr.status >= 500 ? 'error' : 'warning',
-            })
+            reportNet(
+              'FailedXHR',
+              xhr.status,
+              xhr.statusText,
+              url,
+              extra,
+              xhr.status >= 500 ? 'error' : 'warning'
+            )
+          } else if (xhr.status >= 200 && xhr.status < 300) {
+            let ct = ''
+            try {
+              ct = xhr.getResponseHeader('Content-Type') || ''
+            } catch (_) {}
+            if (!shouldPeek(ct)) return
+            const err = appFailureFromXHR(xhr)
+            if (!err) return
+            reportNet('FailedXHR', xhr.status, xhr.statusText, url, err, 'warning')
           }
         } catch (_) {}
       })
@@ -262,23 +358,36 @@
   }
 
   function xhrBody(xhr) {
+    return xhrText(xhr, 500)
+  }
+
+  function appFailureFromXHR(xhr) {
+    try {
+      const rt = xhr.responseType
+      if (rt === 'json') return appErrorFromValue(xhr.response)
+      return appFailureMessage(xhrText(xhr, BODY_CAP))
+    } catch (_) {}
+    return ''
+  }
+
+  function xhrText(xhr, max) {
     try {
       const rt = xhr.responseType
       if (!rt || rt === '' || rt === 'text') {
-        return String(xhr.responseText || '').slice(0, 500)
+        return String(xhr.responseText || '').slice(0, max)
       }
       if (rt === 'json') {
         const v = xhr.response
         if (v == null) return ''
-        if (typeof v === 'string') return v.slice(0, 500)
+        if (typeof v === 'string') return v.slice(0, max)
         try {
-          return JSON.stringify(v).slice(0, 500)
+          return JSON.stringify(v).slice(0, max)
         } catch (_) {
-          return String(v).slice(0, 500)
+          return String(v).slice(0, max)
         }
       }
       if (typeof xhr.response === 'string') {
-        return xhr.response.slice(0, 500)
+        return xhr.response.slice(0, max)
       }
     } catch (_) {}
     return ''
