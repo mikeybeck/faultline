@@ -208,8 +208,10 @@
 
   // Skip bodies that cannot be a JSON object. text/* is included so a JSON
   // payload served as text/plain or text/html is still inspected.
+  // event-stream stays untouched so a live feed is not buffered forever.
   function shouldPeek(contentType) {
     const ct = String(contentType || '').toLowerCase()
+    if (ct.includes('event-stream')) return false
     if (!ct || ct.includes('json') || ct.startsWith('text/')) return true
     if (/^(image|audio|video|font)\//.test(ct)) return false
     if (
@@ -258,10 +260,48 @@
     return appErrorFromValue(data)
   }
 
-  // Read a clone with text(). Canceling the clone's reader aborts the original
-  // body in Chromium, so the page's own res.json() / res.text() never settles.
-  function readCappedText(res, max) {
-    return res.clone().text().then((t) => String(t || '').slice(0, max))
+  function copyHeaders(src) {
+    const headers = new Headers()
+    if (!src || typeof src.forEach !== 'function') return headers
+    try {
+      src.forEach((value, key) => {
+        try {
+          headers.append(key, value)
+        } catch (_) {}
+      })
+    } catch (_) {}
+    return headers
+  }
+
+  // Read the network body once and return a new Response. Sharing the original
+  // stream via clone() makes the page's res.json() fail in Chromium.
+  function takeBody(res, max) {
+    return res.arrayBuffer().then((buf) => {
+      const bytes = new Uint8Array(buf)
+      let text = ''
+      try {
+        text = new TextDecoder().decode(bytes.subarray(0, max))
+      } catch (_) {}
+      const headers = copyHeaders(res.headers)
+      try {
+        headers.delete('content-encoding')
+        headers.set('content-length', String(bytes.byteLength))
+      } catch (_) {}
+      const out = new Response(bytes, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+      })
+      const url = res.url
+      const redirected = !!res.redirected
+      const type = res.type
+      try {
+        Object.defineProperty(out, 'url', { configurable: true, get: () => url })
+        Object.defineProperty(out, 'redirected', { configurable: true, get: () => redirected })
+        Object.defineProperty(out, 'type', { configurable: true, get: () => type })
+      } catch (_) {}
+      return { res: out, text }
+    })
   }
 
   const origFetch = window.fetch
@@ -270,34 +310,37 @@
       return origFetch.apply(this, args).then((res) => {
         try {
           const url = String((res && res.url) || '')
-          if (!res || ignoredURL(url)) return res
-          if (!res.ok && res.status !== 404) {
-            const sendFail = (extra) => {
-              reportNet(
-                'FailedFetch',
-                res.status,
-                res.statusText,
-                url,
-                extra,
-                res.status >= 500 ? 'error' : 'warning'
-              )
-            }
-            try {
-              readCappedText(res, 500)
-                .then((t) => sendFail(t))
-                .catch(() => sendFail(''))
-            } catch (_) {
-              sendFail('')
-            }
-          } else if (res.ok && shouldPeek(res.headers && res.headers.get('content-type'))) {
-            readCappedText(res, BODY_CAP)
-              .then((t) => {
-                const err = appFailureMessage(t)
-                if (!err) return
-                reportNet('FailedFetch', res.status, res.statusText, url, err, 'warning')
-              })
-              .catch(() => {})
-          }
+          if (!res || ignoredURL(url) || !res.body) return res
+          const failed = !res.ok && res.status !== 404
+          let ct = ''
+          try {
+            ct = (res.headers && res.headers.get('content-type')) || ''
+          } catch (_) {}
+          const appFail = res.ok && shouldPeek(ct)
+          if (!failed && !appFail) return res
+          const max = failed ? 500 : BODY_CAP
+          return takeBody(res, max)
+            .then(({ res: out, text }) => {
+              try {
+                if (failed) {
+                  reportNet(
+                    'FailedFetch',
+                    out.status,
+                    out.statusText,
+                    url,
+                    text,
+                    out.status >= 500 ? 'error' : 'warning'
+                  )
+                } else {
+                  const err = appFailureMessage(text)
+                  if (err) {
+                    reportNet('FailedFetch', out.status, out.statusText, url, err, 'warning')
+                  }
+                }
+              } catch (_) {}
+              return out
+            })
+            .catch(() => res)
         } catch (_) {}
         return res
       })
@@ -337,6 +380,14 @@
       return xhr
     }
     WrappedXHR.prototype = OrigXHR.prototype
+    try {
+      Object.setPrototypeOf(WrappedXHR, OrigXHR)
+    } catch (_) {}
+    for (const key of ['UNSENT', 'OPENED', 'HEADERS_RECEIVED', 'LOADING', 'DONE']) {
+      try {
+        WrappedXHR[key] = OrigXHR[key]
+      } catch (_) {}
+    }
     window.XMLHttpRequest = WrappedXHR
   }
 
