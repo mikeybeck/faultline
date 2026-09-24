@@ -260,48 +260,53 @@
     return appErrorFromValue(data)
   }
 
-  function copyHeaders(src) {
-    const headers = new Headers()
-    if (!src || typeof src.forEach !== 'function') return headers
+  // Read a clone and leave the network Response alone. Buffering the body with
+  // arrayBuffer() and rebuilding the Response keeps the whole payload alive and
+  // overrides native url/type fields; that combination crashes the renderer
+  // (STATUS_ACCESS_VIOLATION) on some responses. Cancel the clone only when the
+  // body is longer than max — canceling a finished stream has aborted the
+  // page's own body in Chromium.
+  function peekText(res, max) {
+    let clone
     try {
-      src.forEach((value, key) => {
-        try {
-          headers.append(key, value)
-        } catch (_) {}
-      })
-    } catch (_) {}
-    return headers
-  }
-
-  // Read the network body once and return a new Response. Sharing the original
-  // stream via clone() makes the page's res.json() fail in Chromium.
-  function takeBody(res, max) {
-    return res.arrayBuffer().then((buf) => {
-      const bytes = new Uint8Array(buf)
-      let text = ''
-      try {
-        text = new TextDecoder().decode(bytes.subarray(0, max))
-      } catch (_) {}
-      const headers = copyHeaders(res.headers)
-      try {
-        headers.delete('content-encoding')
-        headers.set('content-length', String(bytes.byteLength))
-      } catch (_) {}
-      const out = new Response(bytes, {
-        status: res.status,
-        statusText: res.statusText,
-        headers,
-      })
-      const url = res.url
-      const redirected = !!res.redirected
-      const type = res.type
-      try {
-        Object.defineProperty(out, 'url', { configurable: true, get: () => url })
-        Object.defineProperty(out, 'redirected', { configurable: true, get: () => redirected })
-        Object.defineProperty(out, 'type', { configurable: true, get: () => type })
-      } catch (_) {}
-      return { res: out, text }
-    })
+      clone = res.clone()
+    } catch (_) {
+      return Promise.resolve('')
+    }
+    const body = clone.body
+    if (!body || typeof body.getReader !== 'function') {
+      return clone.text().then((t) => String(t || '').slice(0, max)).catch(() => '')
+    }
+    let reader
+    try {
+      reader = body.getReader()
+    } catch (_) {
+      return Promise.resolve('')
+    }
+    const dec = new TextDecoder()
+    let out = ''
+    const pump = () =>
+      reader.read().then(({ done, value }) => {
+        if (value && out.length < max) {
+          try {
+            out += dec.decode(value, { stream: !done })
+          } catch (_) {}
+        }
+        if (done || out.length >= max) {
+          if (!done) {
+            try {
+              reader.cancel().catch(() => {})
+            } catch (_) {}
+          } else {
+            try {
+              out += dec.decode()
+            } catch (_) {}
+          }
+          return out.slice(0, max)
+        }
+        return pump()
+      }).catch(() => out.slice(0, max))
+    return pump()
   }
 
   const origFetch = window.fetch
@@ -310,7 +315,7 @@
       return origFetch.apply(this, args).then((res) => {
         try {
           const url = String((res && res.url) || '')
-          if (!res || ignoredURL(url) || !res.body) return res
+          if (!res || ignoredURL(url) || !res.body || res.bodyUsed) return res
           const failed = !res.ok && res.status !== 404
           let ct = ''
           try {
@@ -319,28 +324,27 @@
           const appFail = res.ok && shouldPeek(ct)
           if (!failed && !appFail) return res
           const max = failed ? 500 : BODY_CAP
-          return takeBody(res, max)
-            .then(({ res: out, text }) => {
+          peekText(res, max)
+            .then((text) => {
               try {
                 if (failed) {
                   reportNet(
                     'FailedFetch',
-                    out.status,
-                    out.statusText,
+                    res.status,
+                    res.statusText,
                     url,
                     text,
-                    out.status >= 500 ? 'error' : 'warning'
+                    res.status >= 500 ? 'error' : 'warning'
                   )
                 } else {
                   const err = appFailureMessage(text)
                   if (err) {
-                    reportNet('FailedFetch', out.status, out.statusText, url, err, 'warning')
+                    reportNet('FailedFetch', res.status, res.statusText, url, err, 'warning')
                   }
                 }
               } catch (_) {}
-              return out
             })
-            .catch(() => res)
+            .catch(() => {})
         } catch (_) {}
         return res
       })
