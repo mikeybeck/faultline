@@ -124,7 +124,7 @@
           }
         }
       } catch (_) {}
-      return orig.apply(this, args)
+      return orig.apply(console, args)
     }
   }
 
@@ -260,53 +260,43 @@
     return appErrorFromValue(data)
   }
 
-  // Read a clone and leave the network Response alone. Buffering the body with
-  // arrayBuffer() and rebuilding the Response keeps the whole payload alive and
-  // overrides native url/type fields; that combination crashes the renderer
-  // (STATUS_ACCESS_VIOLATION) on some responses. Cancel the clone only when the
-  // body is longer than max — canceling a finished stream has aborted the
-  // page's own body in Chromium.
+  // Bytes we are willing to buffer. Larger than the snippet we report, so a
+  // normal API payload is read to the end. Past this we skip the body.
+  const PEEK_LIMIT = 1048576
+
+  function declaredLength(res) {
+    try {
+      const raw = res.headers && res.headers.get('content-length')
+      if (raw == null || raw === '') return NaN
+      const n = Number(raw)
+      return Number.isFinite(n) && n >= 0 ? n : NaN
+    } catch (_) {
+      return NaN
+    }
+  }
+
+  // Read a clone to completion and leave the page's Response alone. Do not
+  // read with getReader() and cancel: canceling one branch of a fetch tee
+  // crashes the renderer (STATUS_ACCESS_VIOLATION) while the page reads the
+  // other branch. Skip bodies that are too large to finish, or non-JSON
+  // bodies whose size is unknown (chunked HTML, downloads, streams).
   function peekText(res, max) {
+    const len = declaredLength(res)
+    if (Number.isFinite(len) && len > PEEK_LIMIT) return Promise.resolve('')
+    if (!Number.isFinite(len)) {
+      let ct = ''
+      try {
+        ct = (res.headers && res.headers.get('content-type')) || ''
+      } catch (_) {}
+      if (!String(ct).toLowerCase().includes('json')) return Promise.resolve('')
+    }
     let clone
     try {
       clone = res.clone()
     } catch (_) {
       return Promise.resolve('')
     }
-    const body = clone.body
-    if (!body || typeof body.getReader !== 'function') {
-      return clone.text().then((t) => String(t || '').slice(0, max)).catch(() => '')
-    }
-    let reader
-    try {
-      reader = body.getReader()
-    } catch (_) {
-      return Promise.resolve('')
-    }
-    const dec = new TextDecoder()
-    let out = ''
-    const pump = () =>
-      reader.read().then(({ done, value }) => {
-        if (value && out.length < max) {
-          try {
-            out += dec.decode(value, { stream: !done })
-          } catch (_) {}
-        }
-        if (done || out.length >= max) {
-          if (!done) {
-            try {
-              reader.cancel().catch(() => {})
-            } catch (_) {}
-          } else {
-            try {
-              out += dec.decode()
-            } catch (_) {}
-          }
-          return out.slice(0, max)
-        }
-        return pump()
-      }).catch(() => out.slice(0, max))
-    return pump()
+    return clone.text().then((t) => String(t || '').slice(0, max)).catch(() => '')
   }
 
   const origFetch = window.fetch
@@ -464,8 +454,14 @@
       })
     }
     scan()
+    if (!document.documentElement) return
     const obs = new MutationObserver(scan)
-    obs.observe(document.documentElement, { childList: true, subtree: true })
+    try {
+      obs.observe(document.documentElement, { childList: true, subtree: true })
+    } catch (_) {
+      return
+    }
+    window.addEventListener('pagehide', () => obs.disconnect(), { once: true })
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', hookViteOverlay)
