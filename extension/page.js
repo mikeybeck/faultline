@@ -70,7 +70,7 @@
     if (!payload || noisy(payload.file, payload.stack)) return
     const msg = (payload.message || '').trim()
     if (msg === 'Script error.' && !payload.stack) return
-    const key = `${payload.type}|${msg}|${payload.file || ''}|${payload.line || 0}`
+    const key = `${payload.type}|${msg}|${payload.request || ''}|${payload.file || ''}|${payload.line || 0}`
     if (!shouldSend(key)) return
     try {
       window.dispatchEvent(new CustomEvent('faultline:error', { detail: payload }))
@@ -187,13 +187,18 @@
   hookConsole('warn', 'warning')
 
   const BODY_CAP = 65536
+  const TEXT_CAP = 8192
+  // Bytes we are willing to buffer. Larger than the snippet we report, so a
+  // normal API payload is read to the end. Past this we skip the body.
+  const PEEK_LIMIT = 1048576
 
   function ignoredURL(url) {
     return url.includes('127.0.0.1:9477') || url.includes('localhost:9477')
   }
 
-  function reportNet(type, status, statusText, url, extra, severity) {
+  function reportNet(type, status, statusText, url, extra, severity, request) {
     const line = (status || 0) + ' ' + (statusText || '') + ' ' + url
+    const req = String(request || '').trim()
     send({
       type,
       message: extra ? line + '\n' + extra : line,
@@ -203,7 +208,146 @@
       stack: '',
       url: location.href,
       severity,
+      request: req,
     })
+  }
+
+  function capText(text, max, mark) {
+    const s = String(text || '')
+    if (s.length <= max) return s
+    if (!mark) return s.slice(0, max)
+    return s.slice(0, max) + '\n…'
+  }
+
+  function isBinary(text) {
+    return String(text || '').indexOf('\0') >= 0
+  }
+
+  function binaryNote(n) {
+    const size = Number.isFinite(n) && n >= 0 ? n : 0
+    return '(binary, ' + size + ' bytes)'
+  }
+
+  function formText(fd) {
+    const parts = []
+    try {
+      for (const [k, v] of fd.entries()) {
+        if (typeof v === 'string') {
+          parts.push(k + '=' + v)
+        } else {
+          const name = v && v.name ? v.name : 'file'
+          const size = v && typeof v.size === 'number' ? v.size : 0
+          parts.push(k + '=(' + name + ', ' + size + ' bytes)')
+        }
+      }
+    } catch (_) {}
+    return capText(parts.join('&'), TEXT_CAP, true)
+  }
+
+  function bytesNote(view) {
+    const n = view ? view.byteLength : 0
+    if (n > PEEK_LIMIT) return Promise.resolve(binaryNote(n))
+    const sample = view.subarray(0, Math.min(n, TEXT_CAP + 1))
+    for (let i = 0; i < sample.length; i++) {
+      if (sample[i] === 0) return Promise.resolve(binaryNote(n))
+    }
+    let text = ''
+    try {
+      text = new TextDecoder('utf-8', { fatal: false }).decode(sample)
+    } catch (_) {
+      return Promise.resolve(binaryNote(n))
+    }
+    if (isBinary(text)) return Promise.resolve(binaryNote(n))
+    return Promise.resolve(capText(text, TEXT_CAP, true))
+  }
+
+  // Snapshot a request body without consuming the one fetch or XHR will send.
+  // A ReadableStream can only be read once, and canceling a tee can crash the
+  // renderer, so those bodies are left out.
+  function bodyText(body) {
+    if (body == null || body === '') return Promise.resolve('')
+    if (typeof body === 'string') {
+      if (isBinary(body)) return Promise.resolve(binaryNote(body.length))
+      return Promise.resolve(capText(body, TEXT_CAP, true))
+    }
+    if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+      return Promise.resolve(capText(body.toString(), TEXT_CAP, true))
+    }
+    if (typeof FormData !== 'undefined' && body instanceof FormData) {
+      return Promise.resolve(formText(body))
+    }
+    if (typeof Blob !== 'undefined' && body instanceof Blob) {
+      if (body.size > PEEK_LIMIT) return Promise.resolve(binaryNote(body.size))
+      return body
+        .text()
+        .then((t) => (isBinary(t) ? binaryNote(body.size) : capText(t, TEXT_CAP, true)))
+        .catch(() => '')
+    }
+    if (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer) {
+      return bytesNote(new Uint8Array(body))
+    }
+    if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(body)) {
+      return bytesNote(new Uint8Array(body.buffer, body.byteOffset, body.byteLength))
+    }
+    return Promise.resolve('')
+  }
+
+  function formatRequest(method, body) {
+    const text = String(body || '').trim()
+    if (!text) return ''
+    const m = String(method || '').trim()
+    if (!m) return text
+    return m + '\n' + text
+  }
+
+  function methodOf(input, init) {
+    if (init && init.method) return String(init.method).toUpperCase()
+    if (typeof Request !== 'undefined' && input instanceof Request && input.method) {
+      return String(input.method).toUpperCase()
+    }
+    return 'GET'
+  }
+
+  function urlFromFetchArgs(input) {
+    try {
+      if (typeof input === 'string') return input
+      if (typeof URL !== 'undefined' && input instanceof URL) return String(input)
+      if (typeof Request !== 'undefined' && input instanceof Request) return String(input.url || '')
+      if (input && input.url) return String(input.url)
+    } catch (_) {}
+    return ''
+  }
+
+  function readFetchBody(input, init) {
+    const method = methodOf(input, init)
+    if (init && init.body != null) {
+      return bodyText(init.body)
+        .then((t) => formatRequest(method, t))
+        .catch(() => '')
+    }
+    if (typeof Request !== 'undefined' && input instanceof Request) {
+      let len = NaN
+      try {
+        const raw = input.headers && input.headers.get('content-length')
+        if (raw) len = Number(raw)
+      } catch (_) {}
+      if (Number.isFinite(len) && len > PEEK_LIMIT) {
+        return Promise.resolve(formatRequest(method, binaryNote(len)))
+      }
+      try {
+        const clone = input.clone()
+        return clone
+          .text()
+          .then((t) => {
+            if (isBinary(t)) return formatRequest(method, binaryNote(t.length))
+            return formatRequest(method, capText(t, TEXT_CAP, true))
+          })
+          .catch(() => '')
+      } catch (_) {
+        return Promise.resolve('')
+      }
+    }
+    return Promise.resolve('')
   }
 
   // Skip bodies that cannot be a JSON object. text/* is included so a JSON
@@ -260,10 +404,6 @@
     return appErrorFromValue(data)
   }
 
-  // Bytes we are willing to buffer. Larger than the snippet we report, so a
-  // normal API payload is read to the end. Past this we skip the body.
-  const PEEK_LIMIT = 1048576
-
   function declaredLength(res) {
     try {
       const raw = res.headers && res.headers.get('content-length')
@@ -275,20 +415,47 @@
     }
   }
 
+  // Downloads and media are not error payloads. text/* and JSON are, and a
+  // missing type is allowed so a chunked HTML error page is still read.
+  function skipHeavyBody(contentType) {
+    const ct = String(contentType || '').toLowerCase()
+    if (ct.includes('event-stream')) return true
+    if (/^(image|audio|video|font)\//.test(ct)) return true
+    return (
+      ct.includes('javascript') ||
+      ct.includes('ecmascript') ||
+      ct.includes('wasm') ||
+      ct.includes('octet-stream') ||
+      ct.includes('pdf')
+    )
+  }
+
+  function errorBodyAllowed(contentType) {
+    if (skipHeavyBody(contentType)) return false
+    const ct = String(contentType || '').toLowerCase()
+    return !ct || ct.includes('json') || ct.startsWith('text/')
+  }
+
   // Read a clone to completion and leave the page's Response alone. Do not
   // read with getReader() and cancel: canceling one branch of a fetch tee
   // crashes the renderer (STATUS_ACCESS_VIOLATION) while the page reads the
-  // other branch. Skip bodies that are too large to finish, or non-JSON
-  // bodies whose size is unknown (chunked HTML, downloads, streams).
-  function peekText(res, max) {
+  // other branch. Skip bodies that are too large to finish. For a failed
+  // response, also read chunked JSON or text when the length is unknown.
+  function peekText(res, max, failed) {
     const len = declaredLength(res)
     if (Number.isFinite(len) && len > PEEK_LIMIT) return Promise.resolve('')
+    let ct = ''
+    try {
+      ct = (res.headers && res.headers.get('content-type')) || ''
+    } catch (_) {}
     if (!Number.isFinite(len)) {
-      let ct = ''
-      try {
-        ct = (res.headers && res.headers.get('content-type')) || ''
-      } catch (_) {}
-      if (!String(ct).toLowerCase().includes('json')) return Promise.resolve('')
+      if (failed) {
+        if (!errorBodyAllowed(ct)) return Promise.resolve('')
+      } else if (!String(ct).toLowerCase().includes('json')) {
+        return Promise.resolve('')
+      }
+    } else if (failed && skipHeavyBody(ct)) {
+      return Promise.resolve('')
     }
     let clone
     try {
@@ -296,70 +463,154 @@
     } catch (_) {
       return Promise.resolve('')
     }
-    return clone.text().then((t) => String(t || '').slice(0, max)).catch(() => '')
+    return clone
+      .text()
+      .then((t) => capText(t, max, !!failed))
+      .catch(() => '')
   }
 
   const origFetch = window.fetch
   if (typeof origFetch === 'function') {
     window.fetch = function (...args) {
-      return origFetch.apply(this, args).then((res) => {
-        try {
-          const url = String((res && res.url) || '')
-          if (!res || ignoredURL(url) || !res.body || res.bodyUsed) return res
-          const failed = !res.ok && res.status !== 404
-          let ct = ''
+      let bodyPromise = Promise.resolve('')
+      let urlHint = ''
+      try {
+        bodyPromise = readFetchBody(args[0], args[1])
+        urlHint = urlFromFetchArgs(args[0])
+      } catch (_) {}
+      return origFetch.apply(this, args).then(
+        (res) => {
           try {
-            ct = (res.headers && res.headers.get('content-type')) || ''
-          } catch (_) {}
-          const appFail = res.ok && shouldPeek(ct)
-          if (!failed && !appFail) return res
-          const max = failed ? 500 : BODY_CAP
-          peekText(res, max)
-            .then((text) => {
-              try {
-                if (failed) {
-                  reportNet(
-                    'FailedFetch',
-                    res.status,
-                    res.statusText,
-                    url,
-                    text,
-                    res.status >= 500 ? 'error' : 'warning'
-                  )
-                } else {
-                  const err = appFailureMessage(text)
-                  if (err) {
-                    reportNet('FailedFetch', res.status, res.statusText, url, err, 'warning')
+            const url = String((res && res.url) || urlHint || '')
+            if (!res || ignoredURL(url)) return res
+            const failed = res.status >= 400 && res.status !== 404
+            let ct = ''
+            try {
+              ct = (res.headers && res.headers.get('content-type')) || ''
+            } catch (_) {}
+            const appFail = res.ok && shouldPeek(ct)
+            if (!failed && !appFail) return res
+            const max = failed ? TEXT_CAP : BODY_CAP
+            const textPromise =
+              !res.body || res.bodyUsed ? Promise.resolve('') : peekText(res, max, failed)
+            Promise.all([textPromise, bodyPromise])
+              .then(([text, request]) => {
+                try {
+                  if (failed) {
+                    reportNet(
+                      'FailedFetch',
+                      res.status,
+                      res.statusText,
+                      url,
+                      text,
+                      res.status >= 500 ? 'error' : 'warning',
+                      request
+                    )
+                  } else {
+                    const err = appFailureMessage(text)
+                    if (err) {
+                      reportNet('FailedFetch', res.status, res.statusText, url, err, 'warning', request)
+                    }
                   }
-                }
-              } catch (_) {}
-            })
-            .catch(() => {})
-        } catch (_) {}
-        return res
-      })
+                } catch (_) {}
+              })
+              .catch(() => {})
+          } catch (_) {}
+          return res
+        },
+        (err) => {
+          try {
+            if (!ignoredURL(urlHint)) {
+              bodyPromise
+                .then((request) => {
+                  try {
+                    reportNet(
+                      'FailedFetch',
+                      0,
+                      (err && err.message) || 'Network error',
+                      urlHint,
+                      '',
+                      'error',
+                      request
+                    )
+                  } catch (_) {}
+                })
+                .catch(() => {})
+            }
+          } catch (_) {}
+          return Promise.reject(err)
+        }
+      )
     }
   }
 
   const OrigXHR = window.XMLHttpRequest
   if (typeof OrigXHR === 'function') {
+    const origOpen = OrigXHR.prototype.open
+    const origSend = OrigXHR.prototype.send
+    OrigXHR.prototype.open = function (method, url) {
+      try {
+        this.__flMethod = String(method || 'GET').toUpperCase()
+        this.__flURL = String(url || '')
+        this.__flAborted = false
+        this.__flSent = false
+      } catch (_) {}
+      return origOpen.apply(this, arguments)
+    }
+    OrigXHR.prototype.send = function (body) {
+      try {
+        this.__flSent = true
+        this.__flBodyP = bodyText(body).catch(() => '')
+      } catch (_) {
+        try {
+          this.__flBodyP = Promise.resolve('')
+        } catch (_) {}
+      }
+      return origSend.apply(this, arguments)
+    }
     function WrappedXHR() {
       const xhr = new OrigXHR()
+      xhr.addEventListener('abort', () => {
+        try {
+          xhr.__flAborted = true
+        } catch (_) {}
+      })
       xhr.addEventListener('loadend', () => {
         try {
-          const url = String(xhr.responseURL || '')
+          const url = String(xhr.responseURL || xhr.__flURL || '')
           if (ignoredURL(url)) return
+          const requestP = xhr.__flBodyP || Promise.resolve('')
+          const report = (status, statusText, extra, severity) => {
+            requestP
+              .then((body) => {
+                try {
+                  reportNet(
+                    'FailedXHR',
+                    status,
+                    statusText,
+                    url,
+                    extra,
+                    severity,
+                    formatRequest(xhr.__flMethod || '', body)
+                  )
+                } catch (_) {}
+              })
+              .catch(() => {})
+          }
+          if (xhr.status === 0) {
+            if (!xhr.__flSent || xhr.__flAborted) return
+            report(0, 'Network error', '', 'error')
+            return
+          }
           if (xhr.status >= 400 && xhr.status !== 404) {
-            const extra = xhrBody(xhr)
-            reportNet(
-              'FailedXHR',
-              xhr.status,
-              xhr.statusText,
-              url,
-              extra,
-              xhr.status >= 500 ? 'error' : 'warning'
-            )
-          } else if (xhr.status >= 200 && xhr.status < 300) {
+            xhrErrorBody(xhr)
+              .then((extra) => {
+                report(xhr.status, xhr.statusText, extra, xhr.status >= 500 ? 'error' : 'warning')
+              })
+              .catch(() => {})
+            return
+          }
+          if (xhr.status >= 200 && xhr.status < 300) {
             let ct = ''
             try {
               ct = xhr.getResponseHeader('Content-Type') || ''
@@ -367,7 +618,7 @@
             if (!shouldPeek(ct)) return
             const err = appFailureFromXHR(xhr)
             if (!err) return
-            reportNet('FailedXHR', xhr.status, xhr.statusText, url, err, 'warning')
+            report(xhr.status, xhr.statusText, err, 'warning')
           }
         } catch (_) {}
       })
@@ -385,8 +636,25 @@
     window.XMLHttpRequest = WrappedXHR
   }
 
-  function xhrBody(xhr) {
-    return xhrText(xhr, 500)
+  function xhrErrorBody(xhr) {
+    try {
+      const rt = xhr.responseType
+      if (rt === 'json' && xhr.response == null) return Promise.resolve('')
+      if (rt === 'arraybuffer' && xhr.response) {
+        return bytesNote(new Uint8Array(xhr.response))
+      }
+      if (rt === 'blob' && xhr.response && typeof xhr.response.text === 'function') {
+        const blob = xhr.response
+        if (blob.size > PEEK_LIMIT) return Promise.resolve(binaryNote(blob.size))
+        return blob
+          .text()
+          .then((t) => (isBinary(t) ? binaryNote(blob.size) : capText(t, TEXT_CAP, true)))
+          .catch(() => '')
+      }
+    } catch (_) {
+      return Promise.resolve('')
+    }
+    return Promise.resolve(xhrText(xhr, TEXT_CAP))
   }
 
   function appFailureFromXHR(xhr) {
@@ -402,20 +670,20 @@
     try {
       const rt = xhr.responseType
       if (!rt || rt === '' || rt === 'text') {
-        return String(xhr.responseText || '').slice(0, max)
+        return capText(String(xhr.responseText || ''), max, max === TEXT_CAP)
       }
       if (rt === 'json') {
         const v = xhr.response
         if (v == null) return ''
-        if (typeof v === 'string') return v.slice(0, max)
+        if (typeof v === 'string') return capText(v, max, max === TEXT_CAP)
         try {
-          return JSON.stringify(v).slice(0, max)
+          return capText(JSON.stringify(v), max, max === TEXT_CAP)
         } catch (_) {
-          return String(v).slice(0, max)
+          return capText(String(v), max, max === TEXT_CAP)
         }
       }
       if (typeof xhr.response === 'string') {
-        return xhr.response.slice(0, max)
+        return capText(xhr.response, max, max === TEXT_CAP)
       }
     } catch (_) {}
     return ''

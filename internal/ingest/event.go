@@ -22,6 +22,7 @@ type Payload struct {
 	Stack    string `json:"stack"`
 	URL      string `json:"url"`
 	Severity string `json:"severity"`
+	Request  string `json:"request,omitempty"`
 }
 
 var (
@@ -41,6 +42,12 @@ func ToEvent(sourceName, projectDir string, p Payload) event.Event {
 	if msg == "" {
 		msg = typ
 	}
+	// Request body is shown, but it is not part of the fingerprint, so a
+	// different payload does not split one failure into many rows.
+	display := msg
+	if req := strings.TrimSpace(p.Request); req != "" {
+		display += "\n\nrequest:\n" + req
+	}
 	file := strings.TrimSpace(p.File)
 	line := p.Line
 	if file == "" || line <= 0 {
@@ -53,7 +60,7 @@ func ToEvent(sourceName, projectDir string, p Payload) event.Event {
 		}
 	}
 	now := time.Now()
-	rawParts := []string{typ + ": " + msg}
+	rawParts := []string{typ + ": " + display}
 	if u := strings.TrimSpace(p.URL); u != "" {
 		rawParts = append(rawParts, u)
 	}
@@ -77,7 +84,8 @@ func ToEvent(sourceName, projectDir string, p Payload) event.Event {
 	}
 	sourcemap.Apply(sourcemap.NewResolver(projectDir), &ev, p.Column)
 	ev.File = ResolveFile(ev.File, projectDir)
-	ev.Hash = event.Fingerprint(sourceName, ev.Type, ev.Message, filepath.Base(ev.File), ev.Line)
+	ev.Message = display
+	ev.Hash = event.Fingerprint(sourceName, ev.Type, msg, filepath.Base(ev.File), ev.Line)
 	return ev
 }
 

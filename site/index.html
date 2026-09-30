@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Faultline — local error inbox</title>
+  <meta name="description" content="Faultline watches log files and command output, groups duplicate errors, and opens the offending file:line in your editor.">
+  <link rel="canonical" href="https://getfaultline.app/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="fault-bar" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="#top">Faultline</a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="https://github.com/mikeybeck/faultline">GitHub</a>
+      <a class="btn primary" href="#download">Download</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Desktop app · Linux and Windows</p>
+        <h1>Local error inbox</h1>
+        <p class="lede">Faultline watches log files and command output, groups duplicates, and opens the offending <code>file:line</code> in your editor. Browser page errors arrive through an unpacked extension.</p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#download">Download v0.1.13</a>
+          <a class="btn" href="https://github.com/mikeybeck/faultline">View source</a>
+        </div>
+      </div>
+
+      <div class="mock" aria-hidden="true">
+        <div class="mock-top">
+          <strong>Faultline</strong>
+          <span class="pill ok"><span class="dot"></span>app</span>
+          <span class="pill"><span class="dot"></span>browser</span>
+          <span class="mock-gear">⚙</span>
+        </div>
+        <div class="mock-toolbar">
+          <span class="search">search</span>
+          <span class="chip on">all</span>
+          <span class="chip">error</span>
+          <span class="chip">warning</span>
+          <span class="chip">Recent</span>
+        </div>
+        <div class="mock-body">
+          <div class="mock-list">
+            <div class="row sel">
+              <div class="row-top">
+                <span class="row-title">TypeError <span class="count">×3</span></span>
+                <span class="sev error">error</span>
+              </div>
+              <div class="meta">payments.js:81</div>
+              <div class="meta faint">2s ago · app</div>
+            </div>
+            <div class="row">
+              <div class="row-top">
+                <span class="row-title">IntegrityError</span>
+                <span class="sev error">error</span>
+              </div>
+              <div class="meta">models.py:140</div>
+              <div class="meta faint">1m ago · app</div>
+            </div>
+            <div class="row">
+              <div class="row-top">
+                <span class="row-title">ECONNRESET</span>
+                <span class="sev warning">warning</span>
+              </div>
+              <div class="meta">client.js:22</div>
+              <div class="meta faint">4m ago · vite</div>
+            </div>
+          </div>
+          <div class="mock-detail">
+            <h2>TypeError</h2>
+            <p class="meta">error · app · <span class="count">×3</span></p>
+            <p class="file">payments.js:81</p>
+            <div class="detail-actions">
+              <span class="btn primary sm">Open in editor</span>
+              <span class="btn sm">Copy</span>
+            </div>
+            <pre>TypeError: Cannot read properties of undefined
+    at charge (payments.js:81:12)
+    at process (checkout.js:40:5)</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <h2>What it does</h2>
+      <ul>
+        <li>
+          <h3>Any local source</h3>
+          <p>Log files, command stdout such as <code>npm run dev</code>, and browser errors from an unpacked extension. No script tag in your app.</p>
+        </li>
+        <li>
+          <h3>One row per bug</h3>
+          <p>Fingerprints fold repeats into a single row (<code>×N</code>). IDs, quotes, and long numbers are stripped so one bug stays one row.</p>
+        </li>
+        <li>
+          <h3>Jump to the line</h3>
+          <p>Opens VS Code, Cursor, PhpStorm, or a custom command at <code>file:line</code>. Sourcemaps remap generated JavaScript back to the original file.</p>
+        </li>
+        <li>
+          <h3>Triage that sticks</h3>
+          <p>Dismiss until it happens again, mute a fingerprint, or snooze for 15 minutes or an hour. The inbox is a local SQLite file, so it survives restarts.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section id="download" class="download">
+      <h2>Install</h2>
+      <p class="section-lede">v0.1.13 binaries from GitHub. The desktop app is the main interface. A terminal UI is in the same repo.</p>
+      <div class="download-grid">
+        <a class="download-card" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.13/faultline-linux-amd64">
+          <span class="dl-label">Linux</span>
+          <span class="dl-file">faultline-linux-amd64</span>
+        </a>
+        <a class="download-card" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.13/faultline-windows-amd64.exe">
+          <span class="dl-label">Windows</span>
+          <span class="dl-file">faultline-windows-amd64.exe</span>
+        </a>
+        <a class="download-card" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.13/faultline-extension.zip">
+          <span class="dl-label">Browser extension</span>
+          <span class="dl-file">faultline-extension.zip</span>
+        </a>
+      </div>
+      <p class="tui">Terminal UI, from a checkout of <a href="https://github.com/mikeybeck/faultline">github.com/mikeybeck/faultline</a>:</p>
+      <pre class="install"><code>go install ./cmd/faultline</code></pre>
+      <p class="release-link"><a href="https://github.com/mikeybeck/faultline/releases/tag/v0.1.13">All v0.1.13 release files</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Faultline</span>
+    <a href="https://github.com/mikeybeck/faultline">GitHub</a>
+  </footer>
+</body>
+</html>

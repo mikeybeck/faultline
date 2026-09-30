@@ -118,6 +118,43 @@ func TestParseFramesResolves(t *testing.T) {
 	}
 }
 
+func TestToEventRequestBodyKeepsHash(t *testing.T) {
+	base := Payload{
+		Type:     "FailedXHR",
+		Message:  "500 Internal Server Error https://localphishingbox.com/campaign_controller.php",
+		URL:      "https://localphishingbox.com/campaign_quick_wizard.php",
+		Severity: "error",
+	}
+	withA := base
+	withA.Request = "POST\naction=save&name=Spring"
+	withB := base
+	withB.Request = "POST\naction=save&name=Other"
+	a := ToEvent("browser", "", withA)
+	b := ToEvent("browser", "", withB)
+	none := ToEvent("browser", "", base)
+	if a.Hash != b.Hash || a.Hash != none.Hash {
+		t.Fatalf("hash split on request body: %s %s %s", none.Hash, a.Hash, b.Hash)
+	}
+	if !strings.Contains(a.Message, "500 Internal Server Error https://localphishingbox.com/campaign_controller.php") {
+		t.Fatalf("message = %q", a.Message)
+	}
+	if !strings.Contains(a.Message, "request:\nPOST\naction=save&name=Spring") {
+		t.Fatalf("message missing request: %q", a.Message)
+	}
+	if strings.Contains(a.Message, "name=Other") {
+		t.Fatalf("other body leaked into message: %q", a.Message)
+	}
+	if !strings.Contains(a.Raw, "request:\nPOST\naction=save&name=Spring") {
+		t.Fatalf("raw missing request: %q", a.Raw)
+	}
+	if !strings.Contains(a.Raw, "campaign_quick_wizard.php") {
+		t.Fatalf("raw missing page url: %q", a.Raw)
+	}
+	if strings.Contains(none.Message, "request:") {
+		t.Fatalf("empty request appended: %q", none.Message)
+	}
+}
+
 func TestToEventSkipsNoisyFrames(t *testing.T) {
 	p := Payload{
 		Type:    "Error",
