@@ -241,9 +241,13 @@ echo 'ERROR TypeError: demo in /tmp/App.js:1' >> /tmp/faultline-demo/app.log
 
 ## Website
 
-The marketing site is static HTML in `site/` (no build step), deployed from this repo to Cloudflare Pages at [getfaultline.app](https://getfaultline.app). Root directory `site`, empty build command, output `/`. Custom domain `getfaultline.app` (`.app` requires HTTPS).
+The marketing site is static HTML in `site/` (no build step), hosted on Cloudflare Pages at [getfaultline.app](https://getfaultline.app) (project name `faultline`). It is **not** Git-connected — push alone does not update production. Deploy with:
 
-Pushing `main` updates the site. Download buttons point at the latest GitHub release assets.
+```bash
+npx wrangler pages deploy site --project-name=faultline
+```
+
+Download buttons point at the latest GitHub release assets.
 
 ## Development
 
