@@ -6,28 +6,34 @@ Faultline watches log files and command output, parses them into structured even
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Faultline                         [app ✓] [errors …]   ⚙    │
-│ [search]  all  error  warning     Recent ▾          Clear   │
+│ Faultline                         [app ✓] [browser …]   ⚙   │
+│ [search]  all error warning · Recent · Follow · Views       │
 ├──────────────────────────┬──────────────────────────────────┤
 │ TypeError ×3             │ TypeError                        │
 │ payments.js:81           │ error · app · ×3                 │
 │ 2s ago · app             │ payments.js:81                   │
-│                          │ [Open in editor]  [Copy]         │
+│                          │ [Open in editor] [Copy ▾] …      │
 │ IntegrityError           │ Message + full stack             │
 └──────────────────────────┴──────────────────────────────────┘
 ```
 
-## Install
+## Download
+
+Prebuilt **Linux** and **Windows** desktop apps, plus the browser extension zip, are on [getfaultline.app](https://getfaultline.app) and the [GitHub releases](https://github.com/mikeybeck/faultline/releases) page (latest: **v0.1.14**). macOS desktop is not available yet; the TUI builds on macOS with Go.
+
+## Install from source
 
 Desktop app (Go + Wails, needs Node.js 20+ to build the UI):
 
 ```bash
-# Linux: GTK and WebKitGTK (Arch: gtk3 webkit2gtk-4.1)
-# If pkg-config has webkit2gtk-4.1 rather than 4.0:
+# Linux packages (Ubuntu/Debian):
+#   sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev pkg-config
+# Arch: gtk3 webkit2gtk-4.1
+# Windows cross-compile also needs mingw-w64-gcc
+./build.sh                 # → build/bin/faultline (webkit2_41 on Linux)
+# or:
 wails build -tags webkit2_41
 ```
-
-The binary is written to `build/bin/faultline`.
 
 TUI-only (no WebKit):
 
@@ -35,18 +41,19 @@ TUI-only (no WebKit):
 go install ./cmd/faultline
 # or
 go build -o faultline ./cmd/faultline
+# or
+./build.sh tui
 ```
 
 Requires Go 1.22+ (`go.mod` may pin a newer toolchain). On Linux, desktop notifications use `notify-send` (libnotify); click the notification to focus Faultline and open the file.
 
 ## Quick start (desktop)
 
-1. Run `faultline` (or `wails dev` while developing).
+1. Run `faultline` (or `wails dev -tags webkit2_41` while developing).
 2. **Open folder** — Faultline scans for `*.log` files (skipping `node_modules`, `vendor`, `.git`, …) and guesses the format (including JSON logs).
-3. If nothing is found, **Add command** (`npm run dev`, `docker compose logs -f`, …) or **Add browser source**.
-4. Or **Add log file** for any path, including a file that does not exist yet.
-5. Choose your editor (installed editors are detected), then **Start watching**.
-6. Load the browser extension (Welcome has the steps) so page errors show up in the inbox.
+3. If nothing is found, use **Add source** for a command (`npm run dev`, `docker compose logs -f`, …), a log file (including one that does not exist yet), or a browser source.
+4. Choose your editor (installed editors are detected), then **Start watching**.
+5. Load the browser extension (Welcome has the steps) so page errors show up in the inbox.
 
 Settings are saved as `faultline.yaml` in the project folder. Recent projects are remembered.
 
@@ -78,7 +85,7 @@ faultline --tui --config ./faultline.yaml --tail
 | `s` | Toggle sort by frequency |
 | `q` | Quit |
 
-Desktop shortcuts (inbox): `/` search, `j`/`k` or arrows move, `Enter` focus detail, `o` open, `d` dismiss, `z` snooze 15 minutes, `c` mark clean, `s` sort, `?` help.
+Desktop shortcuts (inbox): `/` search, `j`/`k` or arrows move, `Enter` focus detail, `o` open, `d` dismiss, `z` snooze 15 minutes, `c` mark clean, `s` sort, `?` help. The detail pane keeps **Open in editor** primary; **Copy**, **Snooze**, and **Mute** are menus.
 
 ## Browser errors
 
@@ -111,8 +118,8 @@ browser:
 | Structured events | type, message, file, line, severity, stack, counts |
 | Dedup | fingerprints group repeats (`×N`, first/last seen); IDs, quotes, and long numbers are stripped so one bug stays one row |
 | Persistence | SQLite inbox at `~/.config/faultline/inbox.db` (or the OS equivalent) so groups, mutes, and snoozes survive restarts |
-| Desktop UI | source health, split inbox + detail, search, severity, source filter, sort, follow-latest, saved views, clickable stacks, nearby log lines, source snippet |
-| Triage | dismiss until it happens again, mute this fingerprint or type (unmute in Settings), snooze 15m / 1h, checked-in ignore rules, mark inbox clean, optional clear on git HEAD change |
+| Desktop UI | source health, split inbox + detail, grouped toolbar (filters / sort+follow / Views), clickable stacks, nearby log lines, source snippet |
+| Triage | dismiss until it happens again; mute fingerprint or type (toast **Undo**, or unmute in Settings); snooze 15m / 1h; checked-in ignore rules; mark inbox clean; optional clear on git HEAD change |
 | Sourcemaps | remaps generated JS `file:line` (and stack frames) using sibling `.map` files, inline `data:` maps, or loopback HTTP maps; original snippet when `sourcesContent` or the project file is available |
 | Notifications | desktop alert on **new** fingerprints only; click opens Faultline and the editor (Linux; macOS with `terminal-notifier`; Windows balloon) |
 | Editor | opens VS Code / Cursor / PhpStorm / custom command at file:line |
@@ -190,11 +197,11 @@ inbox:
 
 Ignore rules are checked in. Within a rule every set field must match; any matching rule drops the event. **Save and restart** in Settings applies ignore changes.
 
-**Saved views** remember search, severity, source, and sort. Apply or save them from the inbox toolbar.
+**Saved views** remember search, severity, source, and sort. Use the toolbar **Views** menu to apply a view, save the current filters (inline name field), or delete a view (confirm).
 
 **Mark clean** dismisses what is on screen and stores log resume offsets so the next launch skips those lines. **Replay logs** forgets file offsets and re-reads log files; browser events stay.
 
-**Dismiss** hides a fingerprint until it occurs again. **Snooze** hides it for 15 minutes or an hour even if it repeats (it returns when the timer ends). **Mute** never shows that fingerprint (or event type) until you unmute it in Settings.
+**Dismiss** hides a fingerprint until it occurs again. **Snooze** hides it for 15 minutes or an hour even if it repeats (it returns when the timer ends). **Mute** never shows that fingerprint (or event type) until you unmute it — the toast offers **Undo**, and Settings lists mutes for later recovery. Muting a whole type asks for confirmation first.
 
 Fingerprints treat UUIDs, long hex, quoted strings, and long numbers as interchangeable so the same bug does not split into hundreds of rows. Distinct messages for a group show under **Also seen**. Nearby log lines and a source snippet appear in the detail pane when available.
 
@@ -234,11 +241,9 @@ echo 'ERROR TypeError: demo in /tmp/App.js:1' >> /tmp/faultline-demo/app.log
 
 ## Website
 
-The page in `site/` is a static site with no build step. Host it on Cloudflare Pages (free) at [getfaultline.app](https://getfaultline.app):
+The marketing site is static HTML in `site/` (no build step), deployed from this repo to Cloudflare Pages at [getfaultline.app](https://getfaultline.app). Root directory `site`, empty build command, output `/`. Custom domain `getfaultline.app` (`.app` requires HTTPS).
 
-1. Register `getfaultline.app` at Cloudflare Registrar, in the same account you use for Pages.
-2. Create a Pages project from this repo. Root directory `site`, build command empty, output directory `/`.
-3. Attach `getfaultline.app` as the custom domain. Pages issues the HTTPS certificate. `.app` requires HTTPS.
+Pushing `main` updates the site. Download buttons point at the latest GitHub release assets.
 
 ## Development
 
@@ -254,10 +259,12 @@ wails dev -tags webkit2_41
 ./build.sh tui
 ./build.sh tui windows
 ./build.sh extension
-./build.sh release v0.1.0          # Linux + Windows + extension zip, publish with gh
-./build.sh release v0.1.0 -nsis
-NOTES='Bug fixes.' ./build.sh release v0.1.0
+./build.sh release v0.1.14         # Linux + Windows + extension zip, publish with gh
+./build.sh release v0.1.14 -nsis
+NOTES='Bug fixes.' ./build.sh release v0.1.14
 ```
+
+Product and visual context for design work lives in `PRODUCT.md` and `DESIGN.md`.
 
 ## Roadmap ideas
 
