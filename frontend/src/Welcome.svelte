@@ -65,10 +65,15 @@
       <div class="path">{projectDir || 'Choose a folder — settings are saved as faultline.yaml'}</div>
     </div>
     <div class="row-actions">
-      <button class="btn" on:click={onOpenFolder}>Open folder</button>
-      <button class="btn" on:click={onAddFile}>Add log file</button>
-      <button class="btn" on:click={onAddCommand}>Add command</button>
-      <button class="btn" on:click={onAddBrowser}>Add browser source</button>
+      <button type="button" class="btn primary" on:click={onOpenFolder}>Open folder</button>
+      <details class="add-source">
+        <summary class="btn">Add source</summary>
+        <div class="add-source-menu">
+          <button type="button" class="menu-item" on:click={onAddFile}>Add log file</button>
+          <button type="button" class="menu-item" on:click={onAddCommand}>Add command</button>
+          <button type="button" class="menu-item" on:click={onAddBrowser}>Add browser source</button>
+        </div>
+      </details>
     </div>
 
     {#if scannedEmpty}

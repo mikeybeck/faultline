@@ -69,6 +69,8 @@
   let sort = 'recent'
   let selected = null
   let statusMsg = ''
+  let toastActionLabel = ''
+  let toastActionFn = null
   let total = 0
   let marked = false
   let mutes = []
@@ -79,12 +81,27 @@
   let refreshQueued = false
   let toastTimer
 
-  function toast(msg) {
+  function toast(msg, actionLabel, actionFn) {
     statusMsg = msg
+    toastActionLabel = actionLabel || ''
+    toastActionFn = actionFn || null
     clearTimeout(toastTimer)
     toastTimer = setTimeout(() => {
-      if (statusMsg === msg) statusMsg = ''
-    }, 2800)
+      if (statusMsg === msg) {
+        statusMsg = ''
+        toastActionLabel = ''
+        toastActionFn = null
+      }
+    }, actionFn ? 6000 : 2800)
+  }
+
+  function runToastAction() {
+    const fn = toastActionFn
+    statusMsg = ''
+    toastActionLabel = ''
+    toastActionFn = null
+    clearTimeout(toastTimer)
+    if (fn) fn()
   }
 
   function reportClientError(context, err) {
@@ -534,11 +551,11 @@
     scheduleRefresh()
   }
 
-  async function saveCurrentView() {
-    const name = window.prompt('Name this view')
-    if (!name || !name.trim()) return
+  async function saveCurrentView(name) {
+    const trimmed = (name || '').trim()
+    if (!trimmed) return
     const next = {
-      name: name.trim(),
+      name: trimmed,
       filter,
       severity,
       source: sourceFilter,
@@ -697,12 +714,19 @@
   }
 
   async function doMute(kind, value) {
+    if (kind === 'type') {
+      if (!confirm(`Never show errors of type “${value}”? You can unmute later in Settings.`)) return
+    }
     try {
       await Mute(kind, value)
       selected = null
       await refresh()
       await loadMutes()
-      toast(kind === 'type' ? 'Muted type' : 'Muted')
+      toast(
+        kind === 'type' ? 'Muted type' : 'Muted',
+        'Undo',
+        () => { doUnmute(kind, value) },
+      )
     } catch (e) {
       toast(String(e))
     }
@@ -842,6 +866,7 @@
       {followLatest}
       {views}
       {statusMsg}
+      {toastActionLabel}
       marked={marked}
       {helpOpen}
       {ingestAddr}
@@ -868,6 +893,7 @@
       onApplyView={applyView}
       onSaveView={saveCurrentView}
       onDeleteView={deleteView}
+      onToastAction={runToastAction}
       onHelp={() => (helpOpen = !helpOpen)}
     />
   {/if}

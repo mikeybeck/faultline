@@ -14,7 +14,7 @@
   <header class="site-header">
     <a class="brand" href="#top">Faultline</a>
     <nav>
-      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
       <a href="https://github.com/mikeybeck/faultline">GitHub</a>
       <a class="btn primary" href="#download">Download</a>
     </nav>
@@ -23,11 +23,10 @@
   <main id="top">
     <section class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Desktop app · Linux and Windows</p>
-        <h1>Local error inbox</h1>
-        <p class="lede">Faultline watches log files and command output, groups duplicates, and opens the offending <code>file:line</code> in your editor. Browser page errors arrive through an unpacked extension.</p>
+        <h1>Faultline</h1>
+        <p class="lede"><strong>Local error inbox</strong> — watch logs, group duplicates, jump to <code>file:line</code>.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="#download">Download v0.1.13</a>
+          <a class="btn primary" href="#download">Download v0.1.14</a>
           <a class="btn" href="https://github.com/mikeybeck/faultline">View source</a>
         </div>
       </div>
@@ -37,7 +36,9 @@
           <strong>Faultline</strong>
           <span class="pill ok"><span class="dot"></span>app</span>
           <span class="pill"><span class="dot"></span>browser</span>
-          <span class="mock-gear">⚙</span>
+          <span class="mock-gear">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+          </span>
         </div>
         <div class="mock-toolbar">
           <span class="search">search</span>
@@ -78,8 +79,8 @@
             <p class="meta">error · app · <span class="count">×3</span></p>
             <p class="file">payments.js:81</p>
             <div class="detail-actions">
-              <span class="btn primary sm">Open in editor</span>
-              <span class="btn sm">Copy</span>
+              <span class="mock-action primary">Open in editor</span>
+              <span class="mock-action">Copy</span>
             </div>
             <pre>TypeError: Cannot read properties of undefined
     at charge (payments.js:81:12)
@@ -89,53 +90,62 @@
       </div>
     </section>
 
-    <section id="features" class="features">
-      <h2>What it does</h2>
-      <ul>
+    <section id="how" class="features">
+      <h2>Watch → group → jump</h2>
+      <ol class="steps">
         <li>
-          <h3>Any local source</h3>
-          <p>Log files, command stdout such as <code>npm run dev</code>, and browser errors from an unpacked extension. No script tag in your app.</p>
+          <h3>Watch what you already run</h3>
+          <p>Log files, command stdout such as <code>npm run dev</code>, and browser page errors from an unpacked extension. No script tag in your app.</p>
         </li>
         <li>
           <h3>One row per bug</h3>
-          <p>Fingerprints fold repeats into a single row (<code>×N</code>). IDs, quotes, and long numbers are stripped so one bug stays one row.</p>
+          <p>Repeats collapse to a single inbox row (<code>×N</code>). Changing IDs and quoted noise are stripped so one bug stays one row.</p>
         </li>
         <li>
-          <h3>Jump to the line</h3>
-          <p>Opens VS Code, Cursor, PhpStorm, or a custom command at <code>file:line</code>. Sourcemaps remap generated JavaScript back to the original file.</p>
+          <h3>Open the real line</h3>
+          <p>Jump to <code>file:line</code> in VS Code, Cursor, PhpStorm, or a custom editor command. Sourcemaps remap generated JavaScript when maps are available.</p>
         </li>
-        <li>
-          <h3>Triage that sticks</h3>
-          <p>Dismiss until it happens again, mute a fingerprint, or snooze for 15 minutes or an hour. The inbox is a local SQLite file, so it survives restarts.</p>
-        </li>
-      </ul>
+      </ol>
     </section>
 
     <section id="download" class="download">
-      <h2>Install</h2>
-      <p class="section-lede">v0.1.13 binaries from GitHub. The desktop app is the main interface. A terminal UI is in the same repo.</p>
-      <div class="download-grid">
-        <a class="download-card" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.13/faultline-linux-amd64">
+      <h2>Download</h2>
+      <p class="section-lede">Desktop app for <strong>Linux</strong> and <strong>Windows</strong> (amd64). Pick your OS — then run it and open a project folder.</p>
+      <div class="download-grid download-grid-os">
+        <a class="download-card recommended" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.14/faultline-linux-amd64">
           <span class="dl-label">Linux</span>
           <span class="dl-file">faultline-linux-amd64</span>
+          <span class="dl-hint">chmod +x, then run</span>
         </a>
-        <a class="download-card" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.13/faultline-windows-amd64.exe">
+        <a class="download-card recommended" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.14/faultline-windows-amd64.exe">
           <span class="dl-label">Windows</span>
           <span class="dl-file">faultline-windows-amd64.exe</span>
-        </a>
-        <a class="download-card" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.13/faultline-extension.zip">
-          <span class="dl-label">Browser extension</span>
-          <span class="dl-file">faultline-extension.zip</span>
+          <span class="dl-hint">Double-click the installer binary, or run from a terminal</span>
         </a>
       </div>
-      <p class="tui">Terminal UI, from a checkout of <a href="https://github.com/mikeybeck/faultline">github.com/mikeybeck/faultline</a>:</p>
-      <pre class="install"><code>go install ./cmd/faultline</code></pre>
-      <p class="release-link"><a href="https://github.com/mikeybeck/faultline/releases/tag/v0.1.13">All v0.1.13 release files</a></p>
+      <p class="mac-note">macOS desktop build is not available yet. On a Mac you can still run the <a href="#more">terminal UI via Go</a>, or <a href="https://github.com/mikeybeck/faultline/releases/tag/v0.1.14">star / watch releases</a> for a native app.</p>
+      <ol class="after-download">
+        <li>Open Faultline and choose a project folder (or add a log file / command).</li>
+        <li>When an error appears, use <strong>Open in editor</strong> to jump to <code>file:line</code>.</li>
+      </ol>
+      <details class="more-opts" id="more">
+        <summary>Browser extension, terminal UI, and all release files</summary>
+        <div class="more-opts-body">
+          <a class="download-card" href="https://github.com/mikeybeck/faultline/releases/download/v0.1.14/faultline-extension.zip">
+            <span class="dl-label">Browser extension</span>
+            <span class="dl-file">faultline-extension.zip</span>
+            <span class="dl-hint">Load unpacked in Chrome, Edge, or Firefox while Faultline is watching</span>
+          </a>
+          <p class="tui">Terminal UI (Linux, Windows, or macOS with Go), from a checkout of <a href="https://github.com/mikeybeck/faultline">github.com/mikeybeck/faultline</a>:</p>
+          <pre class="install"><code>go install ./cmd/faultline</code></pre>
+          <p class="release-link"><a href="https://github.com/mikeybeck/faultline/releases/tag/v0.1.14">All v0.1.14 release files</a></p>
+        </div>
+      </details>
     </section>
   </main>
 
   <footer>
-    <span>Faultline</span>
+    <span>Faultline · local error inbox</span>
     <a href="https://github.com/mikeybeck/faultline">GitHub</a>
   </footer>
 </body>

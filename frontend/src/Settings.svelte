@@ -51,100 +51,119 @@
     <div class="banner">{error}</div>
   {/if}
 
-  <div class="field">
-    <span class="lbl">Project folder</span>
-    <div class="path">{projectDir || '—'}</div>
-  </div>
-  <div class="row-actions">
-    <button class="btn" on:click={onOpenFolder}>Change folder</button>
-    <button class="btn" on:click={onAddFile}>Add log file</button>
-    <button class="btn" on:click={onAddCommand}>Add command</button>
-    <button class="btn" on:click={onAddBrowser}>Add browser source</button>
-  </div>
-
-  <ProjectForm
-    {sources}
-    {editorCommand}
-    {customEditor}
-    bind:notifications
-    bind:sound
-    bind:fromStart
-    bind:followLatest
-    bind:clearOnCommit
-    {extraHostsText}
-    showExtraHosts={true}
-    {onSourceChange}
-    {onRemove}
-    {onBrowseEditor}
-    {onExtraHosts}
-  />
-
-  <div class="field">
-    <label for="ignore-rules">Ignore rules</label>
-    <textarea
-      id="ignore-rules"
-      rows="5"
-      value={ignoreText}
-      placeholder={"type: DeprecationWarning\nmessage: ECONNRESET\npath: **/node_modules/**\nregex: heartbeat"}
-      on:input={(e) => onIgnore(e.target.value)}
-    ></textarea>
-    <p class="hint">One rule per line. Prefix with <code>type:</code>, <code>message:</code>, <code>path:</code>, <code>source:</code>, or <code>regex:</code>. Save and restart to apply.</p>
-  </div>
-
-  {#if mutes.length}
-    <div class="field">
-      <span class="lbl">Muted</span>
-      <div class="mute-list">
-        {#each mutes as m}
-          <div class="mute-row">
-            <span class="mute-kind">{m.kind}</span>
-            <span class="path" title={m.value}>{m.value}</span>
-            <button class="btn ghost" on:click={() => onUnmute(m.kind, m.value)}>Unmute</button>
-          </div>
-        {/each}
+  <details class="settings-section" open>
+    <summary>Project &amp; sources</summary>
+    <div class="settings-section-body">
+      <div class="field">
+        <span class="lbl">Project folder</span>
+        <div class="path">{projectDir || '—'}</div>
       </div>
+      <div class="row-actions">
+        <button type="button" class="btn" on:click={onOpenFolder}>Change folder</button>
+        <button type="button" class="btn" on:click={onAddFile}>Add log file</button>
+        <button type="button" class="btn" on:click={onAddCommand}>Add command</button>
+        <button type="button" class="btn" on:click={onAddBrowser}>Add browser source</button>
+      </div>
+
+      <ProjectForm
+        {sources}
+        {editorCommand}
+        {customEditor}
+        bind:notifications
+        bind:sound
+        bind:fromStart
+        bind:followLatest
+        bind:clearOnCommit
+        {extraHostsText}
+        showExtraHosts={true}
+        {onSourceChange}
+        {onRemove}
+        {onBrowseEditor}
+        {onExtraHosts}
+      />
     </div>
-  {/if}
+  </details>
+
+  <details class="settings-section">
+    <summary>Ignore &amp; muted</summary>
+    <div class="settings-section-body">
+      <div class="field">
+        <label for="ignore-rules">Ignore rules</label>
+        <textarea
+          id="ignore-rules"
+          rows="5"
+          value={ignoreText}
+          placeholder={"type: DeprecationWarning\nmessage: ECONNRESET\npath: **/node_modules/**\nregex: heartbeat"}
+          on:input={(e) => onIgnore(e.target.value)}
+        ></textarea>
+        <p class="hint">One rule per line. Prefix with <code>type:</code>, <code>message:</code>, <code>path:</code>, <code>source:</code>, or <code>regex:</code>. Save and restart to apply.</p>
+      </div>
+
+      {#if mutes.length}
+        <div class="field">
+          <span class="lbl">Muted</span>
+          <div class="mute-list">
+            {#each mutes as m}
+              <div class="mute-row">
+                <span class="mute-kind">{m.kind}</span>
+                <span class="path" title={m.value}>{m.value}</span>
+                <button type="button" class="btn ghost" on:click={() => onUnmute(m.kind, m.value)}>Unmute</button>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {:else}
+        <p class="hint">No muted fingerprints or types. Mute from the inbox detail pane.</p>
+      {/if}
+    </div>
+  </details>
 
   {#if recent.length}
-    <div class="field">
-      <span class="lbl">Recent projects</span>
-      <div class="recent-list">
-        {#each recent as p}
-          <button type="button" class="recent-item" on:click={() => onOpenRecent(p.configPath || p.ConfigPath)}>
-            <strong>{projectName(p)}</strong>
-            <span class="path">{p.dir || p.Dir}</span>
-          </button>
-        {/each}
+    <details class="settings-section">
+      <summary>Recent projects</summary>
+      <div class="settings-section-body">
+        <div class="recent-list">
+          {#each recent as p}
+            <button type="button" class="recent-item" on:click={() => onOpenRecent(p.configPath || p.ConfigPath)}>
+              <strong>{projectName(p)}</strong>
+              <span class="path">{p.dir || p.Dir}</span>
+            </button>
+          {/each}
+        </div>
       </div>
-    </div>
+    </details>
   {/if}
 
-  <div class="field">
-    <span class="lbl">Faultline log</span>
-    <div class="path" title={logPath}>{logPath || 'Written next to app config as faultline.log'}</div>
-    <p class="hint">App errors also show in the inbox as source “faultline”.</p>
-  </div>
-  <div class="row-actions">
-    <button type="button" class="btn" on:click={onOpenLog}>Open Faultline log</button>
-  </div>
+  <details class="settings-section">
+    <summary>Diagnostics &amp; extension</summary>
+    <div class="settings-section-body">
+      <div class="field">
+        <span class="lbl">Faultline log</span>
+        <div class="path" title={logPath}>{logPath || 'Written next to app config as faultline.log'}</div>
+        <p class="hint">App errors also show in the inbox as source “faultline”.</p>
+      </div>
+      <div class="row-actions">
+        <button type="button" class="btn" on:click={onOpenLog}>Open Faultline log</button>
+      </div>
 
-  <div class="field">
-    <span class="lbl">Browser extension</span>
-    <div class="path" title={extDir}>{extDir || 'Bundled with the app'}</div>
-    <p class="hint">Load unpacked from that folder, or while watching download {extZipURL || 'http://127.0.0.1:9477/extension.zip'}.</p>
-  </div>
-  <div class="row-actions">
-    <button type="button" class="btn" on:click={onRevealExtension}>Open extension folder</button>
-    <button type="button" class="btn" on:click={onCopyExtensionPath}>Copy path</button>
-  </div>
+      <div class="field">
+        <span class="lbl">Browser extension</span>
+        <div class="path" title={extDir}>{extDir || 'Bundled with the app'}</div>
+        <p class="hint">Load unpacked from that folder, or while watching download {extZipURL || 'http://127.0.0.1:9477/extension.zip'}.</p>
+      </div>
+      <div class="row-actions">
+        <button type="button" class="btn" on:click={onRevealExtension}>Open extension folder</button>
+        <button type="button" class="btn" on:click={onCopyExtensionPath}>Copy path</button>
+      </div>
+    </div>
+  </details>
 
   <div class="row-actions">
-    <button class="btn primary" disabled={busy || sources.length === 0 || !projectDir} on:click={onStart}>
+    <button type="button" class="btn primary" disabled={busy || sources.length === 0 || !projectDir} on:click={onStart}>
       {busy ? 'Working…' : 'Save and restart'}
     </button>
-    <button class="btn" on:click={onNewProject}>New project</button>
-    <button class="btn ghost" on:click={onClose}>Close</button>
+    <button type="button" class="btn" on:click={onNewProject}>New project</button>
+    <button type="button" class="btn ghost" on:click={onClose}>Close</button>
   </div>
   {#if version}
     <p class="hint ver-note">Faultline {version}</p>

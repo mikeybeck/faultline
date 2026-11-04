@@ -12,6 +12,7 @@
   export let followLatest = false
   export let views = []
   export let statusMsg = ''
+  export let toastActionLabel = ''
   export let marked = false
   export let helpOpen = false
   export let ingestAddr = ''
@@ -38,6 +39,7 @@
   export let onApplyView = () => {}
   export let onSaveView = () => {}
   export let onDeleteView = () => {}
+  export let onToastAction = () => {}
   export let onHelp = () => {}
 
   const ROW = 76
@@ -46,6 +48,12 @@
   let scrollTop = 0
   let viewH = 480
   let muteOpen = false
+  let copyOpen = false
+  let snoozeOpen = false
+  let viewsOpen = false
+  let savingView = false
+  let managingViews = false
+  let viewNameDraft = ''
   let now = Date.now()
 
   $: start = Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN)
@@ -57,8 +65,29 @@
   $: narrowed = !!(filter && filter.trim()) || (severity && severity !== 'all') || !!sourceFilter
   $: browserOnly = sources.length > 0 && sources.every((s) => s.type === 'browser')
   $: commandOnly = sources.length > 0 && sources.every((s) => s.type === 'command')
-  $: if (!selected) muteOpen = false
-  $: if (dismissMenus) muteOpen = false
+  $: if (!selected) { muteOpen = false; copyOpen = false; snoozeOpen = false }
+  $: if (dismissMenus) {
+    muteOpen = false
+    copyOpen = false
+    snoozeOpen = false
+    viewsOpen = false
+    savingView = false
+    managingViews = false
+  }
+
+  function resetViewDraft() {
+    savingView = false
+    managingViews = false
+    viewNameDraft = ''
+  }
+
+  function commitSaveView() {
+    const name = (viewNameDraft || '').trim()
+    if (!name) return
+    onSaveView(name)
+    resetViewDraft()
+    viewsOpen = false
+  }
   $: samples = ((selected && selected.samples) || []).filter((s) => s && s !== (selected && selected.message))
   $: contextLines = (selected && selected.context) || []
   $: frames = (selected && selected.frames) || []
@@ -83,7 +112,13 @@
     const ro = new ResizeObserver(apply)
     ro.observe(el)
     const close = (e) => {
-      if (muteOpen && !e.target.closest('.menu')) muteOpen = false
+      if (!e.target.closest('.menu')) {
+        muteOpen = false
+        copyOpen = false
+        snoozeOpen = false
+        viewsOpen = false
+        resetViewDraft()
+      }
     }
     document.addEventListener('mousedown', close)
     const tick = setInterval(() => {
@@ -160,10 +195,11 @@
         type="button"
         class="pill {pillClass(s.state)}"
         class:on={sourceFilter === s.name}
-        title={s.message || s.path}
+        aria-pressed={sourceFilter === s.name}
+        title={(s.message || s.path || s.name) + (s.state ? ` · ${s.state}` : '')}
         on:click={() => toggleSource(s.name)}
       >
-        <span class="dot"></span>
+        <span class="dot" aria-hidden="true"></span>
         {s.name}{#if sourceCount(s.name)} · {sourceCount(s.name)}{/if}{#if s.state === 'ingesting' && s.message}<span class="pill-msg"> · {s.message}</span>{/if}
       </button>
     {/each}
@@ -176,51 +212,108 @@
 </div>
 
 <div class="toolbar">
-  <input
-    class="search"
-    placeholder="Filter type, message, file…"
-    value={filter}
-    on:input={(e) => onFilter(e.target.value)}
-  />
-  <div class="chips">
-    {#each ['all', 'critical', 'error', 'warning'] as s}
-      <button class="chip" class:on={severity === s} on:click={() => onSeverity(s)}>{s}</button>
-    {/each}
-  </div>
-  <select class="select" value={sort} on:change={(e) => onSort(e.target.value)}>
-    <option value="recent">Recent</option>
-    <option value="frequency">Frequency</option>
-  </select>
-  <button
-    class="chip"
-    class:on={followLatest}
-    title="Keep the newest error selected as it arrives"
-    on:click={() => onFollowLatest(!followLatest)}
-  >Follow latest</button>
-  <select class="select" on:change={(e) => { const n = e.target.value; if (n) onApplyView(views.find((v) => v.name === n)); e.target.selectedIndex = 0 }}>
-    <option value="">Views</option>
-    {#each views as v}
-      <option value={v.name}>{v.name}</option>
-    {/each}
-  </select>
-  <button class="btn" title="Save the current search, severity, source, and sort" on:click={onSaveView}>Save view</button>
-  {#if views.length}
-    <select class="select" on:change={(e) => { const n = e.target.value; if (n) onDeleteView(n); e.target.selectedIndex = 0 }}>
-      <option value="">Delete view</option>
-      {#each views as v}
-        <option value={v.name}>{v.name}</option>
+  <div class="toolbar-group toolbar-filters">
+    <input
+      class="search"
+      placeholder="Filter type, message, file…"
+      value={filter}
+      on:input={(e) => onFilter(e.target.value)}
+      aria-label="Filter errors"
+    />
+    <div class="chips" role="group" aria-label="Severity">
+      {#each ['all', 'critical', 'error', 'warning'] as s}
+        <button
+          type="button"
+          class="chip"
+          class:on={severity === s}
+          aria-pressed={severity === s}
+          on:click={() => onSeverity(s)}
+        >{s}</button>
       {/each}
+    </div>
+  </div>
+  <div class="toolbar-group">
+    <select class="select" value={sort} aria-label="Sort" on:change={(e) => onSort(e.target.value)}>
+      <option value="recent">Recent</option>
+      <option value="frequency">Frequency</option>
     </select>
-  {/if}
-  {#if narrowed}
-    <button class="btn" title="Hide the errors currently listed until they happen again" on:click={onDismissMatching}>
-      Dismiss matching{#if total} · {total}{/if}
-    </button>
-  {/if}
-  <button class="btn danger" title="Mark inbox clean — hide current errors and skip these log lines next time" on:click={onClear}>Mark clean</button>
-  {#if marked}
-    <button class="btn" title="Replay log files from the beginning. Browser errors are kept." on:click={onClearMark}>Replay logs</button>
-  {/if}
+    <button
+      type="button"
+      class="chip"
+      class:on={followLatest}
+      aria-pressed={followLatest}
+      title="Keep the newest error selected as it arrives (session preference also in Settings)"
+      on:click={() => onFollowLatest(!followLatest)}
+    >Follow latest</button>
+  </div>
+  <div class="toolbar-group toolbar-end">
+    <div class="menu">
+      <button
+        type="button"
+        class="btn"
+        aria-expanded={viewsOpen}
+        aria-haspopup="menu"
+        on:click={() => {
+          viewsOpen = !viewsOpen
+          if (!viewsOpen) resetViewDraft()
+          muteOpen = false
+          copyOpen = false
+          snoozeOpen = false
+        }}
+      >Views</button>
+      {#if viewsOpen}
+        <div class="menu-pop" role="menu">
+          {#if !managingViews}
+            {#each views as v}
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { viewsOpen = false; resetViewDraft(); onApplyView(v) }}>{v.name}</button>
+            {/each}
+            {#if !views.length && !savingView}
+              <div class="menu-empty">No saved views</div>
+            {/if}
+            {#if savingView}
+              <div class="menu-save">
+                <input
+                  class="path-input"
+                  placeholder="View name"
+                  bind:value={viewNameDraft}
+                  on:keydown={(e) => e.key === 'Enter' && commitSaveView()}
+                />
+                <button type="button" class="btn primary sm" on:click={commitSaveView}>Save</button>
+              </div>
+            {:else}
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { savingView = true; managingViews = false; viewNameDraft = '' }}>Save current filters…</button>
+            {/if}
+            {#if views.length}
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { managingViews = true; savingView = false }}>Delete a view…</button>
+            {/if}
+          {:else}
+            <div class="menu-empty">Choose a view to delete</div>
+            {#each views as v}
+              <button
+                type="button"
+                class="menu-item danger-item"
+                role="menuitem"
+                on:click={() => {
+                  if (!confirm(`Delete saved view “${v.name}”?`)) return
+                  onDeleteView(v.name)
+                }}
+              >Delete “{v.name}”</button>
+            {/each}
+            <button type="button" class="menu-item" role="menuitem" on:click={() => (managingViews = false)}>Back</button>
+          {/if}
+        </div>
+      {/if}
+    </div>
+    {#if narrowed}
+      <button type="button" class="btn" title="Hide the errors currently listed until they happen again" on:click={onDismissMatching}>
+        Dismiss matching{#if total} · {total}{/if}
+      </button>
+    {/if}
+    <button type="button" class="btn danger" title="Mark inbox clean — hide current errors and skip these log lines next time" on:click={onClear}>Mark clean</button>
+    {#if marked}
+      <button type="button" class="btn" title="Replay log files from the beginning. Browser errors are kept." on:click={onClearMark}>Replay logs</button>
+    {/if}
+  </div>
 </div>
 
 <div class="body">
@@ -268,20 +361,59 @@
         </div>
       {/if}
       <div class="detail-actions">
-        <button class="btn primary" disabled={!selected.file} on:click={() => onOpen(selected.hash)}>Open in editor</button>
-        <button class="btn" on:click={() => onCopy(selected)}>Copy</button>
-        <button class="btn" on:click={() => onCopyMarkdown(selected)}>Copy markdown</button>
-        <button class="btn" disabled={!selected.raw} on:click={() => onCopyRaw(selected)}>Copy raw</button>
-        <button class="btn" title="Hide until this error happens again" on:click={() => onDismiss(selected.hash)}>Dismiss</button>
-        <button class="btn" title="Hide for 15 minutes even if it repeats" on:click={() => onSnooze(selected.hash, 15)}>Snooze 15m</button>
-        <button class="btn" title="Hide for an hour even if it repeats" on:click={() => onSnooze(selected.hash, 60)}>Snooze 1h</button>
+        <button
+          type="button"
+          class="btn primary"
+          disabled={!selected.file}
+          title={selected.file ? 'Open at file:line' : 'No file path on this event — try the location link if shown'}
+          on:click={() => onOpen(selected.hash)}
+        >Open in editor</button>
         <div class="menu">
-          <button class="btn" on:click={() => (muteOpen = !muteOpen)}>Mute</button>
+          <button
+            type="button"
+            class="btn"
+            aria-expanded={copyOpen}
+            aria-haspopup="menu"
+            on:click={() => { copyOpen = !copyOpen; muteOpen = false; snoozeOpen = false; viewsOpen = false }}
+          >Copy</button>
+          {#if copyOpen}
+            <div class="menu-pop" role="menu">
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { copyOpen = false; onCopy(selected) }}>Copy message</button>
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { copyOpen = false; onCopyMarkdown(selected) }}>Copy markdown</button>
+              <button type="button" class="menu-item" role="menuitem" disabled={!selected.raw} title={selected.raw ? 'May include request bodies or secrets' : ''} on:click={() => { copyOpen = false; onCopyRaw(selected) }}>Copy raw</button>
+            </div>
+          {/if}
+        </div>
+        <button type="button" class="btn" title="Hide until this error happens again" on:click={() => onDismiss(selected.hash)}>Dismiss</button>
+        <div class="menu">
+          <button
+            type="button"
+            class="btn"
+            aria-expanded={snoozeOpen}
+            aria-haspopup="menu"
+            title="Hide for a while even if it repeats"
+            on:click={() => { snoozeOpen = !snoozeOpen; muteOpen = false; copyOpen = false; viewsOpen = false }}
+          >Snooze</button>
+          {#if snoozeOpen}
+            <div class="menu-pop" role="menu">
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { snoozeOpen = false; onSnooze(selected.hash, 15) }}>15 minutes</button>
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { snoozeOpen = false; onSnooze(selected.hash, 60) }}>1 hour</button>
+            </div>
+          {/if}
+        </div>
+        <div class="menu">
+          <button
+            type="button"
+            class="btn"
+            aria-expanded={muteOpen}
+            aria-haspopup="menu"
+            on:click={() => { muteOpen = !muteOpen; copyOpen = false; snoozeOpen = false; viewsOpen = false }}
+          >Mute</button>
           {#if muteOpen}
-            <div class="menu-pop">
-              <button type="button" class="menu-item" on:click={() => { muteOpen = false; onMute('hash', selected.hash) }}>Never show this error</button>
+            <div class="menu-pop" role="menu">
+              <button type="button" class="menu-item" role="menuitem" on:click={() => { muteOpen = false; onMute('hash', selected.hash) }}>Never show this error</button>
               {#if selected.type}
-                <button type="button" class="menu-item" on:click={() => { muteOpen = false; onMute('type', selected.type) }}>Never show {selected.type}</button>
+                <button type="button" class="menu-item" role="menuitem" on:click={() => { muteOpen = false; onMute('type', selected.type) }}>Never show {selected.type}</button>
               {/if}
             </div>
           {/if}
@@ -373,5 +505,10 @@
 {/if}
 
 {#if statusMsg}
-  <div class="toast" role="status">{statusMsg}</div>
+  <div class="toast" role="status">
+    <span>{statusMsg}</span>
+    {#if toastActionLabel}
+      <button type="button" class="toast-action" on:click={onToastAction}>{toastActionLabel}</button>
+    {/if}
+  </div>
 {/if}

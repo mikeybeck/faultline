@@ -1,0 +1,464 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-03T22:29:54Z",
+  "title": "Design System: Faultline",
+  "extensions": {
+    "colorMeta": {
+      "fault-coral": {
+        "role": "primary",
+        "displayName": "Fault Coral",
+        "canonical": "#d44838",
+        "tonalRamp": [
+          "#3a1410",
+          "#5c1f18",
+          "#8a2f24",
+          "#b83d30",
+          "#d44838",
+          "#f08a7a",
+          "#f6b5aa",
+          "#fce8e4"
+        ]
+      },
+      "hot-ash": {
+        "role": "primary",
+        "displayName": "Hot Ash",
+        "canonical": "#ff8a72",
+        "tonalRamp": [
+          "#3d1812",
+          "#6a2a1e",
+          "#9a3f2c",
+          "#cc5a40",
+          "#ff8a72",
+          "#ffae9c",
+          "#ffd0c4",
+          "#fff0eb"
+        ]
+      },
+      "fault-coral-dim": {
+        "role": "primary",
+        "displayName": "Fault Coral Dim",
+        "canonical": "rgba(212, 72, 56, 0.16)",
+        "tonalRamp": [
+          "rgba(212,72,56,0.04)",
+          "rgba(212,72,56,0.08)",
+          "rgba(212,72,56,0.12)",
+          "rgba(212,72,56,0.16)",
+          "rgba(212,72,56,0.24)",
+          "rgba(212,72,56,0.36)",
+          "rgba(212,72,56,0.5)",
+          "rgba(212,72,56,0.7)"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Primary Hover",
+        "canonical": "#e85d4c",
+        "tonalRamp": [
+          "#3d1512",
+          "#621f1a",
+          "#8f2f26",
+          "#c04538",
+          "#e85d4c",
+          "#f49082",
+          "#f8b8ae",
+          "#fceae6"
+        ]
+      },
+      "pit-charcoal": {
+        "role": "neutral",
+        "displayName": "Pit Charcoal",
+        "canonical": "#101218",
+        "tonalRamp": [
+          "#07080b",
+          "#101218",
+          "#171b24",
+          "#1e2430",
+          "#2a3140",
+          "#3d4658",
+          "#9aa3b8",
+          "#f4f6fb"
+        ]
+      },
+      "panel-slate": {
+        "role": "neutral",
+        "displayName": "Panel Slate",
+        "canonical": "#171b24",
+        "tonalRamp": [
+          "#0a0c10",
+          "#101218",
+          "#171b24",
+          "#1e2430",
+          "#2a3140",
+          "#3d4658",
+          "#c5cddc",
+          "#f4f6fb"
+        ]
+      },
+      "panel-raised": {
+        "role": "neutral",
+        "displayName": "Panel Raised",
+        "canonical": "#1e2430",
+        "tonalRamp": [
+          "#0c0e14",
+          "#141820",
+          "#1e2430",
+          "#2a3140",
+          "#3d4658",
+          "#5a6578",
+          "#c5cddc",
+          "#f4f6fb"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#2a3140",
+        "tonalRamp": [
+          "#101218",
+          "#171b24",
+          "#1e2430",
+          "#2a3140",
+          "#3d4658",
+          "#5a6578",
+          "#9aa3b8",
+          "#e8ecf4"
+        ]
+      },
+      "hairline-hover": {
+        "role": "neutral",
+        "displayName": "Hairline Hover",
+        "canonical": "#3d4658",
+        "tonalRamp": [
+          "#171b24",
+          "#1e2430",
+          "#2a3140",
+          "#3d4658",
+          "#5a6578",
+          "#7a8499",
+          "#c5cddc",
+          "#f4f6fb"
+        ]
+      },
+      "text-bright": {
+        "role": "neutral",
+        "displayName": "Text Bright",
+        "canonical": "#f4f6fb",
+        "tonalRamp": [
+          "#2a3140",
+          "#5a6578",
+          "#9aa3b8",
+          "#c5cddc",
+          "#dce1ec",
+          "#e8ecf4",
+          "#f4f6fb",
+          "#ffffff"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Text Muted",
+        "canonical": "#c5cddc",
+        "tonalRamp": [
+          "#2a3140",
+          "#3d4658",
+          "#5a6578",
+          "#7a8499",
+          "#9aa3b8",
+          "#c5cddc",
+          "#e0e5ef",
+          "#f4f6fb"
+        ]
+      },
+      "text-faint": {
+        "role": "neutral",
+        "displayName": "Text Faint",
+        "canonical": "#9aa3b8",
+        "tonalRamp": [
+          "#1e2430",
+          "#2a3140",
+          "#3d4658",
+          "#5a6578",
+          "#7a8499",
+          "#9aa3b8",
+          "#c5cddc",
+          "#e8ecf4"
+        ]
+      },
+      "live-green": {
+        "role": "secondary",
+        "displayName": "Live Green",
+        "canonical": "#3dd68c",
+        "tonalRamp": [
+          "#0c2a1c",
+          "#144a30",
+          "#1d6e46",
+          "#2aa366",
+          "#3dd68c",
+          "#6ee3aa",
+          "#a8f0cc",
+          "#e6faf0"
+        ]
+      },
+      "wait-amber": {
+        "role": "tertiary",
+        "displayName": "Wait Amber",
+        "canonical": "#f0b429",
+        "tonalRamp": [
+          "#2e2208",
+          "#5a4210",
+          "#8a6518",
+          "#c08e20",
+          "#f0b429",
+          "#f5c85c",
+          "#f9dd96",
+          "#fdf3d6"
+        ]
+      },
+      "err-coral": {
+        "role": "primary",
+        "displayName": "Err Coral",
+        "canonical": "#ff7a6e",
+        "tonalRamp": [
+          "#3d1512",
+          "#6a2420",
+          "#9a3830",
+          "#cc5248",
+          "#ff7a6e",
+          "#ffa49c",
+          "#ffcdc8",
+          "#fff1ef"
+        ]
+      },
+      "crit-rose": {
+        "role": "primary",
+        "displayName": "Crit Rose",
+        "canonical": "#ff4d6d",
+        "tonalRamp": [
+          "#3d0f18",
+          "#6a1a2a",
+          "#9a283e",
+          "#cc3854",
+          "#ff4d6d",
+          "#ff8196",
+          "#ffb6c2",
+          "#ffe8ec"
+        ]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#9aa3b8",
+          "#c5cddc",
+          "#dce1ec",
+          "#e8ecf4",
+          "#f4f6fb",
+          "#fafbfd",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "stack-well": {
+        "role": "neutral",
+        "displayName": "Stack Well",
+        "canonical": "#161a22",
+        "tonalRamp": [
+          "#0a0c10",
+          "#101218",
+          "#161a22",
+          "#1e2430",
+          "#2a3140",
+          "#3d4658",
+          "#9aa3b8",
+          "#f4f6fb"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Marketing hero headlines only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles and welcome card titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Detail pane event type and mid-scale headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Marketing and long-form UI copy at 16px."
+      },
+      "body-app": {
+        "displayName": "Body App",
+        "purpose": "Dense desktop app body at 14.5px."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Eyebrows, severity tags, uppercase block headings."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Paths, stacks, commands, and code evidence."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lifted-panel",
+        "value": "0 18px 50px rgba(0, 0, 0, 0.35)",
+        "purpose": "Cards, modals, menus, mock window, toasts."
+      },
+      {
+        "name": "live-glow",
+        "value": "0 0 8px #3dd68c",
+        "purpose": "Healthy source status dots only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control",
+        "value": "border-color 0.15s, background 0.15s, transform 0.1s",
+        "purpose": "Default button and icon-button transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "app-stack",
+        "value": "840px"
+      },
+      {
+        "name": "site-stack",
+        "value": "860px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary CTA \u2014 Fault Coral fill, used sparingly.",
+      "html": "<button class=\"ds-btn-primary\">Download</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; border: 1px solid transparent; background: var(--accent, #d44838); color: #fff; font-weight: 600; border-radius: 10px; padding: 8px 14px; cursor: pointer; transition: background 0.15s; } .ds-btn-primary:hover { background: #e85d4c; } .ds-btn-primary:focus-visible { outline: 2px solid #ff8a72; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet control chrome for secondary actions.",
+      "html": "<button class=\"ds-btn-secondary\">Copy</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; border: 1px solid var(--line, #2a3140); background: var(--bg-elev, #171b24); color: var(--text, #f4f6fb); border-radius: 10px; padding: 8px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; } .ds-btn-secondary:hover { border-color: #3d4658; background: var(--bg-elev-2, #1e2430); } .ds-btn-secondary:focus-visible { outline: 2px solid #d44838; outline-offset: 2px; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip-on",
+      "description": "Pill filter; on-state uses coral dim wash.",
+      "html": "<button class=\"ds-chip ds-chip-on\">error</button>",
+      "css": ".ds-chip { border: 1px solid var(--line, #2a3140); background: transparent; border-radius: 999px; padding: 5px 10px; font-size: 12px; color: var(--text, #f4f6fb); cursor: pointer; } .ds-chip-on { background: rgba(212, 72, 56, 0.16); border-color: #d44838; } .ds-chip:hover { border-color: #3d4658; } .ds-chip:focus-visible { outline: 2px solid #ff8a72; outline-offset: 2px; }"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Toolbar search; focus border becomes Fault Coral.",
+      "html": "<input class=\"ds-input-search\" type=\"search\" placeholder=\"search\" />",
+      "css": ".ds-input-search { width: 100%; background: var(--bg-elev, #171b24); border: 1px solid var(--line, #2a3140); border-radius: 10px; padding: 8px 12px; color: var(--text, #f4f6fb); outline: none; font: inherit; } .ds-input-search:focus { border-color: #d44838; } .ds-input-search::placeholder { color: #9aa3b8; }"
+    },
+    {
+      "name": "Inbox Row Selected",
+      "kind": "custom",
+      "refersTo": "inbox-row-selected",
+      "description": "Selected error group with coral inset fracture bar.",
+      "html": "<div class=\"ds-row ds-row-sel\"><div class=\"ds-row-top\"><span class=\"ds-row-title\">TypeError <span class=\"ds-count\">\u00d73</span></span><span class=\"ds-sev\">error</span></div><div class=\"ds-meta\">payments.js:81</div><div class=\"ds-meta-faint\">2s ago \u00b7 app</div></div>",
+      "css": ".ds-row { padding: 10px 16px; border-bottom: 1px solid #2a3140; font-family: \"Segoe UI\", system-ui, sans-serif; color: #f4f6fb; } .ds-row-sel { background: rgba(212, 72, 56, 0.16); box-shadow: inset 3px 0 0 #d44838; } .ds-row-top { display: flex; justify-content: space-between; gap: 8px; } .ds-row-title { font-weight: 620; } .ds-count { color: #ff8a72; font-variant-numeric: tabular-nums; font-size: 12px; } .ds-sev { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #ff7a6e; } .ds-meta { color: #c5cddc; font-size: 13px; margin-top: 4px; } .ds-meta-faint { color: #9aa3b8; font-size: 12px; margin-top: 2px; }"
+    },
+    {
+      "name": "Source Pill",
+      "kind": "chip",
+      "refersTo": "chip-off",
+      "description": "Source health pill with status dot.",
+      "html": "<span class=\"ds-pill ds-pill-ok\"><span class=\"ds-dot\"></span>app</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: #171b24; border: 1px solid #2a3140; font-size: 12px; color: #c5cddc; font-family: \"Segoe UI\", system-ui, sans-serif; } .ds-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa3b8; } .ds-pill-ok .ds-dot { background: #3dd68c; box-shadow: 0 0 8px #3dd68c; }"
+    },
+    {
+      "name": "Welcome Card",
+      "kind": "card",
+      "refersTo": "card-panel",
+      "description": "Lifted onboarding/settings container.",
+      "html": "<div class=\"ds-card\"><h1 class=\"ds-card-title\">Faultline</h1><p class=\"ds-card-lede\">Open a folder to start watching logs.</p><button class=\"ds-btn-primary\">Open folder</button></div>",
+      "css": ".ds-card { width: min(420px, 100%); background: #171b24; border: 1px solid #2a3140; border-radius: 18px; padding: 28px; box-shadow: 0 18px 50px rgba(0,0,0,0.35); color: #f4f6fb; font-family: \"Segoe UI\", system-ui, sans-serif; } .ds-card-title { margin: 0 0 6px; font-size: 28px; font-weight: 650; letter-spacing: -0.02em; } .ds-card-lede { margin: 0 0 24px; color: #c5cddc; font-size: 15px; line-height: 1.55; } .ds-btn-primary { display: inline-flex; border: none; background: #d44838; color: #fff; font-weight: 600; border-radius: 10px; padding: 8px 14px; cursor: pointer; } .ds-btn-primary:hover { background: #e85d4c; }"
+    },
+    {
+      "name": "Site Nav",
+      "kind": "nav",
+      "refersTo": "button-secondary",
+      "description": "Marketing header: brand, muted links, primary download.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\">Faultline</a><nav class=\"ds-nav-links\"><a href=\"#features\">Features</a><a href=\"#\">GitHub</a><a class=\"ds-btn-primary\" href=\"#download\">Download</a></nav></header>",
+      "css": ".ds-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; font-family: \"Segoe UI\", system-ui, sans-serif; background: #101218; } .ds-brand { color: #f4f6fb; font-weight: 650; letter-spacing: 0.04em; text-decoration: none; } .ds-nav-links { display: flex; align-items: center; gap: 18px; } .ds-nav-links a { color: #c5cddc; text-decoration: none; } .ds-nav-links a:hover { color: #f4f6fb; } .ds-btn-primary { display: inline-flex; background: #d44838; color: #fff; font-weight: 600; border-radius: 10px; padding: 8px 14px; text-decoration: none; } .ds-btn-primary:hover { background: #e85d4c; color: #fff; }"
+    },
+    {
+      "name": "Fault Bar",
+      "kind": "custom",
+      "refersTo": "button-primary",
+      "description": "3px signature fracture gradient at the top edge.",
+      "html": "<div class=\"ds-fault-bar\" aria-hidden=\"true\"></div>",
+      "css": ".ds-fault-bar { height: 3px; width: 100%; background: linear-gradient(90deg, transparent, #d44838, #ff8a72, #f0b429, transparent); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Fracture Console",
+    "overview": "Faultline\u2019s UI is a dark instrument panel for local error triage. Surfaces stay in charcoal pits and slate panels; the coral fracture \u2014 accent, selection inset, and the thin top fault-bar \u2014 marks where something broke. Density is high and utilitarian: inbox rows, chips, and mono stacks outrank decorative chrome. The same token set binds the desktop app, marketing site, and extension options so the product feels like one console whether you are downloading or triaging.\n\nPersonality is precise and instrument-like: calm fields, sparse accent, glowing health dots only when status matters. Reject pastel SaaS dashboards, purple glow stacks, and light \u201cfriendly\u201d marketing chrome. Depth comes from tonal steps and hairline borders; one soft ambient shadow lifts cards, modals, and the marketing mock \u2014 not every control.",
+    "keyCharacteristics": [
+      "Shared dark token set across site, desktop, and extension",
+      "Coral fracture used sparingly for CTA, selection, and the fault-bar",
+      "System sans for UI; mono reserved for paths, stacks, and code",
+      "Soft radii (8\u201318px) with pill chips; hairline borders as structure",
+      "Tonal elevation first; ambient shadow only on lifted panels"
+    ],
+    "rules": [
+      {
+        "name": "The Fracture Rule",
+        "body": "Fault Coral and Hot Ash together should occupy a small fraction of any screen. Status greens/ambers are for health and severity only \u2014 never as brand decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Is Evidence Rule",
+        "body": "If the string is a filesystem path, stack frame, YAML, or shell command, it is mono. Do not style decorative UI labels in mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Split Console Rule",
+        "body": "Inbox triage is always list + detail (or stacked equivalent). Do not replace the split with card grids of errors.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Controls and list rows stay flat. Shadows are for floating overlays and hero mocks, never for every button.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Soft Instrument Rule",
+        "body": "Prefer 8\u201312px radii for interactive chrome. Reserve larger radii (14\u201318px) for primary floating containers.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do keep Pit Charcoal \u2192 Panel Slate \u2192 Panel Raised as the only surface ladder.",
+      "Do use Fault Coral for primary action, selection fracture, and the fault-bar \u2014 then stop.",
+      "Do put paths, stacks, and commands in mono.",
+      "Do preserve the list/detail inbox split and 76px row rhythm in the app.",
+      "Do reuse the shared CSS variables rather than inventing parallel palettes per surface."
+    ],
+    "donts": [
+      "Don't introduce light themes, purple accents, or multi-stop decorative glows.",
+      "Don't put drop shadows on every control or list row.",
+      "Don't use Live Green / Wait Amber as brand decoration outside status and severity.",
+      "Don't swap in display webfonts that fight the system Segoe/UI stack without an explicit rebrand.",
+      "Don't invent testimonials or product claims in marketing chrome \u2014 visual system stays honest to PRODUCT.md evidence."
+    ]
+  }
+}

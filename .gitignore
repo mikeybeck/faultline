@@ -15,3 +15,20 @@ build/release
 /deploy.sh
 /deploy.local.sh
 /ship.sh
+
+# Impeccable / Cursor local
+.cursor-project-from-transcripts
+.impeccable/live/sessions/
+.impeccable/live/server.json
+.impeccable/live/roots.json
+.impeccable/live/app-root.json
+.impeccable/live/inject-journal.json
+.impeccable/live/previews/
+.impeccable/live/annotations/
+.impeccable/live/artifacts/
+.impeccable/live/accept-receipts/
+.impeccable/live/locks/
+.impeccable/live/cache/
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.impeccable/config.local.json
