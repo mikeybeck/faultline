@@ -57,12 +57,15 @@ Requires Go 1.22+ (`go.mod` may pin a newer toolchain). On Linux, desktop notifi
 
 Settings are saved as `faultline.yaml` in the project folder. Recent projects are remembered.
 
-Existing log lines are ingested on start, then new lines are followed. Pass `--tail` to skip what is already in the file.
+Existing log lines are ingested on start (`--from-start`, the default), then new lines are followed. Pass `--tail` to skip what is already in the file. Config may also be named `faultline.yml`, `.faultline.yaml`, or `.faultline.yml`.
 
 ```bash
 faultline --config ./faultline.yaml
 faultline --config ./faultline.yaml --tail
+faultline --from-start --config ./faultline.yaml
 ```
+
+Full field reference: [docs/config.md](docs/config.md).
 
 ## Terminal UI
 
@@ -117,7 +120,8 @@ browser:
 | Sources | Log files (`generic`, `json`, Laravel, Apache), command stdout/stderr (for example `npm run dev` or `docker compose logs -f`), and browser errors via the extension |
 | Structured events | type, message, file, line, severity, stack, counts |
 | Dedup | fingerprints group repeats (`×N`, first/last seen); IDs, quotes, and long numbers are stripped so one bug stays one row |
-| Persistence | SQLite inbox at `~/.config/faultline/inbox.db` (or the OS equivalent) so groups, mutes, and snoozes survive restarts |
+| Persistence | SQLite inbox at `~/.config/faultline/inbox.db` (or the OS equivalent) so groups, mutes, and snoozes survive restarts; recent projects, mark-clean offsets, self-log, and the unpacked extension also live under that directory — see [docs/config.md](docs/config.md#data-on-disk) |
+| Privacy | Local-only; no Faultline cloud account. Failed browser calls may store request/response bodies (including secrets) in the local inbox — see [docs/troubleshooting.md](docs/troubleshooting.md#secrets-in-the-inbox) |
 | Desktop UI | source health, split inbox + detail, grouped toolbar (filters / sort+follow / Views), clickable stacks, nearby log lines, source snippet |
 | Triage | dismiss until it happens again; mute fingerprint or type (toast **Undo**, or unmute in Settings); snooze 15m / 1h; checked-in ignore rules; mark inbox clean; optional clear on git HEAD change |
 | Sourcemaps | remaps generated JS `file:line` (and stack frames) using sibling `.map` files, inline `data:` maps, or loopback HTTP maps; original snippet when `sourcesContent` or the project file is available |
@@ -191,13 +195,15 @@ inbox:
     - regex: "heartbeat"
   views:
     - name: Browser
+      filter: ""
       source: browser
       severity: error
+      sort: recent
 ```
 
-Ignore rules are checked in. Within a rule every set field must match; any matching rule drops the event. **Save and restart** in Settings applies ignore changes.
+Ignore rules are checked in. Within a rule every set field must match; any matching rule drops the event. **Save and restart** in Settings applies ignore changes. Fields: `type`, `message`, `path` (glob ok), `source`, `regex`.
 
-**Saved views** remember search, severity, source, and sort. Use the toolbar **Views** menu to apply a view, save the current filters (inline name field), or delete a view (confirm).
+**Saved views** remember search (`filter`), severity, source, and sort. Use the toolbar **Views** menu to apply a view, save the current filters (inline name field), or delete a view (confirm).
 
 **Mark clean** dismisses what is on screen and stores log resume offsets so the next launch skips those lines. **Replay logs** forgets file offsets and re-reads log files; browser events stay.
 
@@ -249,6 +255,15 @@ npx wrangler pages deploy site --project-name=faultline
 
 Download buttons point at the latest GitHub release assets.
 
+## Docs
+
+| Doc | Contents |
+|---|---|
+| [docs/config.md](docs/config.md) | YAML fields, CLI flags, data directories |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Extension, builds, secrets, empty inbox |
+| [docs/contributing.md](docs/contributing.md) | Layout, tests, release + site deploy checklist |
+| [PRODUCT.md](PRODUCT.md) / [DESIGN.md](DESIGN.md) | Positioning and visual system |
+
 ## Development
 
 ```bash
@@ -268,7 +283,7 @@ wails dev -tags webkit2_41
 NOTES='Bug fixes.' ./build.sh release v0.1.14
 ```
 
-Product and visual context for design work lives in `PRODUCT.md` and `DESIGN.md`.
+After a release, bump version links in `site/index.html` and deploy with Wrangler (site is not Git-synced) — details in [docs/contributing.md](docs/contributing.md#release-checklist).
 
 ## Roadmap ideas
 

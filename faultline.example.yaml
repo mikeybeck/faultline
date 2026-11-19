@@ -1,6 +1,9 @@
 # Copy to faultline.yaml in your project root, then adjust paths.
 #
 #   cp faultline.example.yaml faultline.yaml
+#
+# Also accepted: faultline.yml, .faultline.yaml, .faultline.yml
+# Full reference: docs/config.md
 
 sources:
   - name: app

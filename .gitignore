@@ -16,6 +16,9 @@ build/release
 /deploy.local.sh
 /ship.sh
 
+# Wrangler local cache (Cloudflare Pages deploys)
+.wrangler/
+
 # Impeccable / Cursor local
 .cursor-project-from-transcripts
 .impeccable/live/sessions/

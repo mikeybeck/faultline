@@ -45,6 +45,7 @@ Local-first error triage — not a hosted APM or Sentry replacement. It watches 
 ## Evidence on Hand
 
 - README.md product and capability documentation.
+- `docs/config.md`, `docs/troubleshooting.md`, and `docs/contributing.md` for config, ops, and release detail.
 - Marketing page and mock inbox UI in `site/`.
 - Sample logs and demo config under `testdata/`.
 - No customer testimonials, case studies, pricing, or third-party benchmarks in-repo — future work must not fabricate them.
